@@ -17,10 +17,10 @@ import AVFAudio
 /// The protocol exists so transcription can be exercised against a
 /// file-backed fake in tests without touching real audio hardware.
 protocol AudioCapturing: Actor {
-    /// Starts the engine and returns a bounded stream of PCM buffers,
-    /// already converted to the transcription target format (16 kHz mono).
-    /// The stream finishes when `stop()` is called or the engine tears down.
-    func bufferStream() throws -> AsyncStream<AVAudioPCMBuffer>
+    /// Starts capture and returns a stream of PCM buffers in the source's
+    /// native format (consumers convert downstream — see AudioFormatConverter).
+    /// The stream finishes when `stop()` is called or the source tears down.
+    func bufferStream() throws -> AudioBufferStream
 
     /// Stops the engine, removes the input tap, and finishes the stream.
     func stop()
