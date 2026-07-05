@@ -17,7 +17,9 @@ import AVFAudio
 /// rebuild it if the input format changes mid-stream (e.g. a route change
 /// swaps the microphone).
 nonisolated final class AudioFormatConverter {
-    static let targetFormat = AVAudioFormat(
+    /// Default target when the consumer doesn't dictate one (SpeechAnalyzer
+    /// reports its own preferred format at runtime).
+    static let speechTargetFormat = AVAudioFormat(
         commonFormat: .pcmFormatFloat32,
         sampleRate: 16_000,
         channels: 1,
@@ -25,23 +27,28 @@ nonisolated final class AudioFormatConverter {
     )!
 
     let inputFormat: AVAudioFormat
+    let outputFormat: AVAudioFormat
     private let converter: AVAudioConverter
 
-    init(inputFormat: AVAudioFormat) throws {
-        guard let converter = AVAudioConverter(from: inputFormat, to: Self.targetFormat) else {
+    init(
+        inputFormat: AVAudioFormat,
+        outputFormat: AVAudioFormat = AudioFormatConverter.speechTargetFormat
+    ) throws {
+        guard let converter = AVAudioConverter(from: inputFormat, to: outputFormat) else {
             throw CaptureError.converterUnavailable
         }
         self.inputFormat = inputFormat
+        self.outputFormat = outputFormat
         self.converter = converter
     }
 
     /// Converts one buffer. Output frame counts vary by ±filter-delay from
     /// the exact rate ratio; totals converge over a stream.
     func convert(_ buffer: AVAudioPCMBuffer) throws -> AVAudioPCMBuffer {
-        let ratio = Self.targetFormat.sampleRate / buffer.format.sampleRate
+        let ratio = outputFormat.sampleRate / buffer.format.sampleRate
         let capacity = AVAudioFrameCount((Double(buffer.frameLength) * ratio).rounded(.up)) + 32
         guard let output = AVAudioPCMBuffer(
-            pcmFormat: Self.targetFormat,
+            pcmFormat: outputFormat,
             frameCapacity: max(capacity, 1)
         ) else {
             throw CaptureError.bufferAllocationFailed
@@ -77,7 +84,7 @@ nonisolated final class AudioFormatConverter {
     /// the converter cannot be reused afterwards.
     func flush() throws -> AVAudioPCMBuffer? {
         guard let output = AVAudioPCMBuffer(
-            pcmFormat: Self.targetFormat,
+            pcmFormat: outputFormat,
             frameCapacity: 4_096
         ) else {
             throw CaptureError.bufferAllocationFailed

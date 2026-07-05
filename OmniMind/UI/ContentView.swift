@@ -12,6 +12,7 @@ import SwiftData
 struct ContentView: View {
     @Query(sort: \Meeting.startedAt, order: .reverse)
     private var meetings: [Meeting]
+    @State private var showingRecorder = false
 
     var body: some View {
         NavigationStack {
@@ -37,6 +38,16 @@ struct ContentView: View {
                 }
             }
             .navigationTitle("OmniMind")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("New Capture", systemImage: "record.circle") {
+                        showingRecorder = true
+                    }
+                }
+            }
+            .sheet(isPresented: $showingRecorder) {
+                RecordingView()
+            }
         }
     }
 }
