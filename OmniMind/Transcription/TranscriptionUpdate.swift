@@ -15,4 +15,7 @@ nonisolated enum TranscriptionUpdate: Sendable, Equatable {
     case volatile(String)
     /// A finalized, immutable segment. The only variant persistence accepts.
     case finalized(TranscriptSegment)
+    /// Instantaneous input loudness (0...1), one per audio buffer — drives
+    /// the live level meter. Never persisted.
+    case audioLevel(Float)
 }

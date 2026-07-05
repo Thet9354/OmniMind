@@ -183,6 +183,44 @@ struct CaptureTests {
         #expect(bufferCount == 4)           // 4096 + 4096 + 4096 + 3712
     }
 
+    // MARK: - AudioLevel (Phase 9 — level metering)
+
+    @Test("Silence meters at zero; full-scale signal meters near one")
+    func levelMeteringExtremes() throws {
+        let format = AVAudioFormat(
+            commonFormat: .pcmFormatFloat32,
+            sampleRate: 16_000, channels: 1, interleaved: false
+        )!
+        let silence = try #require(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 1_600))
+        silence.frameLength = 1_600
+        #expect(AudioLevel.normalizedLevel(of: silence) == 0)
+
+        let loud = try makeSineBuffer(sampleRate: 16_000, channels: 1, frames: 1_600)
+        let data = try #require(loud.floatChannelData)
+        for frame in 0..<Int(loud.frameLength) {
+            data[0][frame] = frame.isMultiple(of: 2) ? 1.0 : -1.0   // full scale
+        }
+        #expect(AudioLevel.normalizedLevel(of: loud) > 0.95)
+    }
+
+    @Test("Louder signals meter monotonically higher")
+    func levelMeteringMonotonic() throws {
+        func level(amplitude: Float) throws -> Float {
+            let buffer = try makeSineBuffer(sampleRate: 16_000, channels: 1, frames: 1_600)
+            let data = try #require(buffer.floatChannelData)
+            for frame in 0..<Int(buffer.frameLength) {
+                data[0][frame] *= amplitude
+            }
+            return AudioLevel.normalizedLevel(of: buffer)
+        }
+        let quiet = try level(amplitude: 0.05)
+        let medium = try level(amplitude: 0.4)
+        let loud = try level(amplitude: 1.0)
+        #expect(quiet < medium)
+        #expect(medium < loud)
+        #expect(quiet > 0)
+    }
+
     @Test("stop() finishes the stream")
     func stopFinishesStream() async throws {
         let url = try writeTempWAV(frames: 16_000)

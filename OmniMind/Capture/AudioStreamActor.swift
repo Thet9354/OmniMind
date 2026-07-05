@@ -53,7 +53,7 @@ actor AudioStreamActor: AudioCapturing {
         let bridge = AudioBufferBridge(capacity: 48)
         self.bridge = bridge
 
-        input.installTap(onBus: 0, bufferSize: 4096, format: hardwareFormat) { buffer, _ in
+        input.installTap(onBus: 0, bufferSize: 2048, format: hardwareFormat) { buffer, _ in
             // ── real-time render thread ──
             // The sole legal action here: one lock-free enqueue. No locks,
             // no allocation, no conversion, no actor state (§1.1).
@@ -194,7 +194,7 @@ actor AudioStreamActor: AudioCapturing {
                 teardown()
                 return
             }
-            input.installTap(onBus: 0, bufferSize: 4096, format: newFormat) { buffer, _ in
+            input.installTap(onBus: 0, bufferSize: 2048, format: newFormat) { buffer, _ in
                 bridge.yield(buffer)
             }
             if !engine.isRunning {

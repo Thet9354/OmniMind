@@ -111,6 +111,7 @@ actor TranscriptionActor {
             guard let converter else { continue }
             let converted = try converter.convert(buffer)
             if converted.frameLength > 0 {
+                continuation.yield(.audioLevel(AudioLevel.normalizedLevel(of: converted)))
                 inputBuilder.yield(AnalyzerInput(buffer: converted))
             }
         }

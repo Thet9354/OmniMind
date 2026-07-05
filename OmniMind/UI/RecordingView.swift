@@ -18,6 +18,7 @@ struct RecordingView: View {
     /// better recognition from their regional model.
     @AppStorage("transcriptionLocale") private var localeIdentifier = "en_US"
     @State private var availableLocales: [Locale] = []
+    @State private var autoFollow = true
 
     var body: some View {
         NavigationStack {
@@ -30,11 +31,15 @@ struct RecordingView: View {
             .task {
                 model.attach(container: modelContext.container)
                 model.preferredLocaleIdentifier = localeIdentifier
+                // Pay model spin-up NOW, while the user reads the screen —
+                // Record then starts in milliseconds.
+                model.prewarm()
                 let supported = await SpeechTranscriber.supportedLocales
                 availableLocales = supported
                     .filter { $0.identifier.hasPrefix("en") }
                     .sorted { $0.identifier < $1.identifier }
             }
+            .sensoryFeedback(.impact(weight: .medium), trigger: model.isRecording)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     localeMenu
@@ -54,6 +59,7 @@ struct RecordingView: View {
                 Button {
                     localeIdentifier = locale.identifier
                     model.preferredLocaleIdentifier = locale.identifier
+                    model.prewarm()   // rebuild the warm analyzer for the new accent
                 } label: {
                     if locale.identifier == localeIdentifier {
                         Label(Self.displayName(for: locale), systemImage: "checkmark")
@@ -86,10 +92,12 @@ struct RecordingView: View {
                     ForEach(model.liveTail.elements) { segment in
                         Text(segment.text)
                             .frame(maxWidth: .infinity, alignment: .leading)
+                            .transition(.opacity)
                     }
                     if !model.pendingChunkText.isEmpty {
                         // Finalized speech still accumulating into its chunk.
                         Text(model.pendingChunkText)
+                            .foregroundStyle(.primary.opacity(0.8))
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     if !model.volatileText.isEmpty {
@@ -97,19 +105,61 @@ struct RecordingView: View {
                             .foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .accessibilityLabel("Transcribing: \(model.volatileText)")
-                            .id("volatile")
                     }
+                    Color.clear.frame(height: 1).id("live-bottom")
                 }
                 .padding()
+                .animation(.easeOut(duration: 0.2), value: model.liveTail.totalAppended)
+            }
+            // The user scrolling up to reread pauses auto-follow; the Live
+            // pill (below) jumps back. No animation on follow scrolls —
+            // queued animations make live text feel like it's chasing itself.
+            .onScrollPhaseChange { _, newPhase in
+                if newPhase == .interacting {
+                    autoFollow = false
+                }
             }
             .onChange(of: model.volatileText) {
-                withAnimation { proxy.scrollTo("volatile", anchor: .bottom) }
+                if autoFollow {
+                    proxy.scrollTo("live-bottom", anchor: .bottom)
+                }
+            }
+            .onChange(of: model.pendingChunkText) {
+                if autoFollow {
+                    proxy.scrollTo("live-bottom", anchor: .bottom)
+                }
+            }
+            .overlay(alignment: .bottomTrailing) {
+                if !autoFollow, model.isRecording {
+                    Button {
+                        autoFollow = true
+                        proxy.scrollTo("live-bottom", anchor: .bottom)
+                    } label: {
+                        Label("Live", systemImage: "arrow.down.circle.fill")
+                            .font(.footnote.bold())
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(.thinMaterial, in: Capsule())
+                    }
+                    .padding()
+                    .accessibilityHint("Resumes following the live transcription")
+                }
             }
         }
     }
 
     private var controls: some View {
         VStack(spacing: 12) {
+            if model.isRecording, let startedAt = model.recordingStartedAt {
+                HStack(spacing: 12) {
+                    LevelMeterView(level: model.audioLevel)
+                    Text(startedAt, style: .timer)
+                        .font(.subheadline.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Recording in progress")
+            }
             if case .failed(let message) = model.status {
                 Text(message)
                     .font(.footnote)
@@ -156,6 +206,29 @@ struct RecordingView: View {
         }
         .padding()
         .background(.bar)
+    }
+}
+
+/// Five capsule bars pulsing with input loudness — the app icon, alive.
+/// Instant visual proof the app hears you, which makes model latency read
+/// as "thinking" instead of "deaf".
+private struct LevelMeterView: View {
+    let level: Float
+    private static let weights: [CGFloat] = [0.35, 0.65, 1.0, 0.65, 0.35]
+
+    var body: some View {
+        HStack(spacing: 3) {
+            ForEach(Self.weights.indices, id: \.self) { index in
+                Capsule()
+                    .fill(.tint)
+                    .frame(
+                        width: 4,
+                        height: 6 + 24 * Self.weights[index] * CGFloat(level)
+                    )
+            }
+        }
+        .frame(height: 32)
+        .animation(.easeOut(duration: 0.12), value: level)
     }
 }
 

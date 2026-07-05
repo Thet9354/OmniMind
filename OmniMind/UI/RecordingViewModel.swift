@@ -11,6 +11,7 @@
 import AVFAudio
 import Observation
 import SwiftData
+import UIKit
 
 @MainActor
 @Observable
@@ -38,6 +39,10 @@ final class RecordingViewModel {
     private(set) var pendingChunkText = ""
     /// BCP-47-ish identifier for the transcription locale (accent variant).
     var preferredLocaleIdentifier = "en_US"
+    /// Instantaneous input loudness (0...1) for the live level meter.
+    private(set) var audioLevel: Float = 0
+    /// Set when recording actually starts; drives the elapsed timer.
+    private(set) var recordingStartedAt: Date?
 
     var isDegraded: Bool { droppedBuffers > 0 }
 
@@ -47,6 +52,10 @@ final class RecordingViewModel {
     private var store: EmbeddingStore?
     private var meetingID: UUID?
     private var coalescer = SegmentCoalescer()
+    /// Built ahead of the Record tap so starting is a switch-flip, not a
+    /// model spin-up. Consumed per session (analyzers are single-use).
+    private var prewarmedTranscription: TranscriptionActor?
+    private var prewarmedLocale: String?
 
     var isRecording: Bool { status == .recording || status == .preparing }
 
@@ -55,6 +64,31 @@ final class RecordingViewModel {
     func attach(container: ModelContainer) {
         guard store == nil else { return }
         store = EmbeddingStore(modelContainer: container)
+    }
+
+    /// Pays the expensive startup costs (permission prompt, speech model,
+    /// embedder) while the user is still looking at the screen, so Record
+    /// starts in milliseconds. Safe to call repeatedly; rebuilds only when
+    /// the locale changed or the previous prewarm was consumed.
+    func prewarm() {
+        guard sessionTask == nil else { return }
+        Task {
+            _ = await AVAudioApplication.requestRecordPermission()
+            if let store {
+                try? await store.prepareEmbedder()
+            }
+            await prewarmTranscription()
+        }
+    }
+
+    private func prewarmTranscription() async {
+        guard sessionTask == nil else { return }
+        guard prewarmedTranscription == nil
+                || prewarmedLocale != preferredLocaleIdentifier else { return }
+        prewarmedTranscription = try? await TranscriptionActor(
+            locale: Locale(identifier: preferredLocaleIdentifier)
+        )
+        prewarmedLocale = prewarmedTranscription != nil ? preferredLocaleIdentifier : nil
     }
 
     func start() {
@@ -83,6 +117,11 @@ final class RecordingViewModel {
             healthTask = nil
             sessionTask = nil
             capture = nil
+            audioLevel = 0
+            recordingStartedAt = nil
+            UIApplication.shared.isIdleTimerDisabled = false
+            // Warm up for the NEXT session while the user reviews this one.
+            Task { await self.prewarmTranscription() }
         }
         status = .preparing
 
@@ -98,17 +137,32 @@ final class RecordingViewModel {
         }
 
         do {
-            let transcription = try await TranscriptionActor(
-                locale: Locale(identifier: preferredLocaleIdentifier)
-            )
+            // Use the prewarmed analyzer when the locale still matches;
+            // analyzers are single-use, so consume it either way.
+            let transcription: TranscriptionActor
+            if let warmed = prewarmedTranscription,
+               prewarmedLocale == preferredLocaleIdentifier {
+                transcription = warmed
+            } else {
+                transcription = try await TranscriptionActor(
+                    locale: Locale(identifier: preferredLocaleIdentifier)
+                )
+            }
+            prewarmedTranscription = nil
+            prewarmedLocale = nil
+
             let capture = AudioStreamActor()
             self.capture = capture
             let buffers = try await capture.bufferStream()
             status = .recording
+            recordingStartedAt = .now
+            UIApplication.shared.isIdleTimerDisabled = true
             startHealthPolling(for: capture)
 
             for try await update in await transcription.transcribe(buffers) {
                 switch update {
+                case .audioLevel(let level):
+                    audioLevel = level
                 case .volatile(let text):
                     volatileText = text
                 case .finalized(let segment):

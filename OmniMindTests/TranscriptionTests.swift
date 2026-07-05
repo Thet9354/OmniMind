@@ -169,6 +169,8 @@ struct TranscriptionTests {
         var sawVolatile = false
         for try await update in await transcription.transcribe(buffers) {
             switch update {
+            case .audioLevel:
+                break
             case .volatile:
                 sawVolatile = true
             case .finalized(let segment):
