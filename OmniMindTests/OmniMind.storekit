@@ -1,0 +1,70 @@
+{
+ "appName": "OmniMind",
+ "identifier": "8A1B2C3D-0000-0000-0000-000000000001",
+ "nonRenewingSubscriptions": [],
+ "products": [],
+ "settings": {
+  "_applicationInternalID": "0",
+  "_developerTeamID": "K8FKWBYV9S",
+  "_failTransactionsEnabled": false,
+  "_lastSynchronizedDate": 0,
+  "_locale": "en_US",
+  "_storeKitErrors": [],
+  "_storefront": "USA"
+ },
+ "subscriptionGroups": [
+  {
+   "id": "8A1B2C3D-0000-0000-0000-000000000020",
+   "localizations": [],
+   "name": "OmniMind Pro",
+   "subscriptions": [
+    {
+     "adHocOffers": [],
+     "codeOffers": [],
+     "displayPrice": "4.99",
+     "familyShareable": false,
+     "groupNumber": 1,
+     "internalID": "8A1B2C3D-0000-0000-0000-000000000021",
+     "introductoryOffer": null,
+     "localizations": [
+      {
+       "description": "Unlimited history, semantic search, AI summaries.",
+       "displayName": "OmniMind Pro Monthly",
+       "locale": "en_US"
+      }
+     ],
+     "productID": "com.thetpine.workspace.OmniMind.pro.monthly",
+     "recurringSubscriptionPeriod": "P1M",
+     "referenceName": "Pro Monthly",
+     "subscriptionGroupID": "8A1B2C3D-0000-0000-0000-000000000020",
+     "type": "RecurringSubscription"
+    },
+    {
+     "adHocOffers": [],
+     "codeOffers": [],
+     "displayPrice": "39.99",
+     "familyShareable": false,
+     "groupNumber": 2,
+     "internalID": "8A1B2C3D-0000-0000-0000-000000000022",
+     "introductoryOffer": null,
+     "localizations": [
+      {
+       "description": "Unlimited history, semantic search, AI summaries.",
+       "displayName": "OmniMind Pro Annual",
+       "locale": "en_US"
+      }
+     ],
+     "productID": "com.thetpine.workspace.OmniMind.pro.annual",
+     "recurringSubscriptionPeriod": "P1Y",
+     "referenceName": "Pro Annual",
+     "subscriptionGroupID": "8A1B2C3D-0000-0000-0000-000000000020",
+     "type": "RecurringSubscription"
+    }
+   ]
+  }
+ ],
+ "version": {
+  "major": 4,
+  "minor": 0
+ }
+}

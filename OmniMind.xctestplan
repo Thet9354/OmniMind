@@ -1,0 +1,31 @@
+{
+  "configurations" : [
+    {
+      "id" : "8A1B2C3D-0000-0000-0000-0000000000A1",
+      "name" : "Default",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "storeKitConfigurationURI" : "container:OmniMindTests\/OmniMind.storekit"
+  },
+  "testTargets" : [
+    {
+      "target" : {
+        "containerPath" : "container:OmniMind.xcodeproj",
+        "identifier" : "D385E3872FF962A700B5B481",
+        "name" : "OmniMindTests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:OmniMind.xcodeproj",
+        "identifier" : "D385E3912FF962A700B5B481",
+        "name" : "OmniMindUITests"
+      }
+    }
+  ],
+  "version" : 1
+}

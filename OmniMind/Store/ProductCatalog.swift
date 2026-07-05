@@ -18,6 +18,10 @@ nonisolated enum ProductCatalog {
 
     static let all: Set<String> = [proMonthly, proAnnual]
 
+    /// Free tier: the most recent N meetings stay readable; semantic search
+    /// is Pro-only. Capture itself is never gated.
+    static let freeMeetingLimit = 3
+
     static func tier(unlockedBy productID: String) -> Tier {
         all.contains(productID) ? .pro : .free
     }
