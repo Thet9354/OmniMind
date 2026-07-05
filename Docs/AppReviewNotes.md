@@ -1,0 +1,38 @@
+# App Review Notes (paste into Review Notes / Beta Review Notes)
+
+## What the app does
+
+OmniMind records meetings and transcribes them live, entirely on-device,
+using Apple's Speech framework (SpeechAnalyzer). Users can search their
+meeting history semantically and generate AI summaries — all processing
+uses Apple's on-device frameworks (NaturalLanguage, FoundationModels).
+No audio or text ever leaves the device; the app has no server.
+
+## Permission justifications
+
+- **Microphone (NSMicrophoneUsageDescription):** core function — live
+  meeting capture. Requested only when the user starts their first
+  recording, never at launch.
+- **Speech recognition (NSSpeechRecognitionUsageDescription):** converts
+  the captured audio to text using on-device recognition. No audio is
+  sent to Apple servers by the app (on-device SpeechAnalyzer models).
+
+## Demo script for review
+
+1. Launch → tap the record button (top right) → "Record".
+2. Grant microphone permission when prompted.
+3. Speak a few sentences — live transcription appears (grey → black).
+4. Tap Stop → Done → the meeting appears in the list.
+5. Open the meeting → "Generate Summary" (requires Apple Intelligence-
+   capable hardware; on other devices a key-excerpts summary appears).
+6. Magnifying-glass icon → search by meaning (e.g. "budget" finds
+   money-related discussion phrased differently).
+
+No account, no login, no network dependency after the one-time on-device
+model downloads (managed by the OS).
+
+## In-app purchases
+
+A StoreKit 2 subscription subsystem exists in the binary but is dormant:
+during the pilot, all features are free and no paywall is reachable. No
+products are configured in App Store Connect yet.

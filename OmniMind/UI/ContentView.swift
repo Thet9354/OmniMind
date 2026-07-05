@@ -16,6 +16,7 @@ struct ContentView: View {
     private var meetings: [Meeting]
     @Environment(\.modelContext) private var modelContext
     @Environment(EntitlementStore.self) private var entitlements
+    @Environment(\.openURL) private var openURL
     @State private var showingRecorder = false
     @State private var showingSearch = false
     @State private var showingPaywall = false
@@ -57,6 +58,14 @@ struct ContentView: View {
                             showingPaywall = true
                         }
                     }
+                }
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Send Feedback", systemImage: "envelope") {
+                        if let url = Self.feedbackURL() {
+                            openURL(url)
+                        }
+                    }
+                    .accessibilityHint("Emails the developer with your device details prefilled")
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("New Capture", systemImage: "record.circle") {
@@ -107,6 +116,30 @@ struct ContentView: View {
                 }
             }
         }
+    }
+
+    /// Pilot feedback channel: prefilled mail with the context needed to
+    /// reproduce reports (app build, OS). No analytics SDK — the feedback
+    /// loop respects the same privacy stance as the product.
+    private static func feedbackURL() -> URL? {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "?"
+        let build = info?["CFBundleVersion"] as? String ?? "?"
+        let os = ProcessInfo.processInfo.operatingSystemVersionString
+        let body = """
+
+
+        —
+        OmniMind \(version) (\(build)) · iOS \(os)
+        """
+        var components = URLComponents()
+        components.scheme = "mailto"
+        components.path = "thetpine254@gmail.com"
+        components.queryItems = [
+            URLQueryItem(name: "subject", value: "OmniMind Pilot Feedback"),
+            URLQueryItem(name: "body", value: body),
+        ]
+        return components.url
     }
 
     private func deleteMeetings(at offsets: IndexSet) {

@@ -400,6 +400,7 @@
 				DEVELOPMENT_TEAM = K8FKWBYV9S;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "OmniMind listens to your meetings to transcribe them privately, on this device.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "OmniMind converts speech to text entirely on-device. Audio never leaves your iPhone.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -434,6 +435,7 @@
 				DEVELOPMENT_TEAM = K8FKWBYV9S;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "OmniMind listens to your meetings to transcribe them privately, on this device.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "OmniMind converts speech to text entirely on-device. Audio never leaves your iPhone.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
