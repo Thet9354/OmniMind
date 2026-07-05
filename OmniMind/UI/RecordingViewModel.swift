@@ -26,13 +26,19 @@ final class RecordingViewModel {
     private(set) var status: Status = .idle
     /// The in-flight hypothesis. Replaced wholesale on every volatile update.
     private(set) var volatileText = ""
-    /// Finalized segments for the current session (mirrors what was persisted).
-    private(set) var segments: [TranscriptSegment] = []
+    /// Newest finals only (§5.1) — the store holds the full record, so a
+    /// 3-hour session costs the live view the same memory as a 3-minute one.
+    private(set) var liveTail = TailBuffer<TranscriptSegment>(capacity: 50)
     /// Non-fatal: capture keeps running even if a save fails.
     private(set) var persistenceWarning: String?
+    /// §5.2 backpressure telemetry, polled from the capture bridge.
+    private(set) var droppedBuffers = 0
+
+    var isDegraded: Bool { droppedBuffers > 0 }
 
     private var capture: AudioStreamActor?
     private var sessionTask: Task<Void, Never>?
+    private var healthTask: Task<Void, Never>?
     private var store: EmbeddingStore?
     private var meetingID: UUID?
 
@@ -47,9 +53,10 @@ final class RecordingViewModel {
 
     func start() {
         guard sessionTask == nil else { return }
-        segments.removeAll()
+        liveTail.removeAll()
         volatileText = ""
         persistenceWarning = nil
+        droppedBuffers = 0
         meetingID = nil
         sessionTask = Task { await runSession() }
     }
@@ -64,6 +71,8 @@ final class RecordingViewModel {
 
     private func runSession() async {
         defer {
+            healthTask?.cancel()
+            healthTask = nil
             sessionTask = nil
             capture = nil
         }
@@ -86,13 +95,14 @@ final class RecordingViewModel {
             self.capture = capture
             let buffers = try await capture.bufferStream()
             status = .recording
+            startHealthPolling(for: capture)
 
             for try await update in await transcription.transcribe(buffers) {
                 switch update {
                 case .volatile(let text):
                     volatileText = text
                 case .finalized(let segment):
-                    segments.append(segment)
+                    liveTail.append(segment)
                     volatileText = ""
                     await persistFinal(segment)
                 }
@@ -105,6 +115,18 @@ final class RecordingViewModel {
         } catch {
             status = .failed(error.localizedDescription)
             await capture?.stop()
+        }
+    }
+
+    /// Polls the bridge's shed counter so sustained backpressure surfaces
+    /// in the UI as a degraded-capture warning instead of silent data loss.
+    private func startHealthPolling(for capture: AudioStreamActor) {
+        healthTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(2))
+                guard let self, !Task.isCancelled else { return }
+                self.droppedBuffers = await capture.droppedBufferCount
+            }
         }
     }
 

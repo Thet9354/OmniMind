@@ -37,7 +37,12 @@ struct RecordingView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 12) {
-                    ForEach(model.segments) { segment in
+                    if model.liveTail.evictedCount > 0 {
+                        Text("Showing the latest \(model.liveTail.elements.count) of \(model.liveTail.totalAppended) segments — everything is saved.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    ForEach(model.liveTail.elements) { segment in
                         Text(segment.text)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
@@ -45,6 +50,7 @@ struct RecordingView: View {
                         Text(model.volatileText)
                             .foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
+                            .accessibilityLabel("Transcribing: \(model.volatileText)")
                             .id("volatile")
                     }
                 }
@@ -69,6 +75,15 @@ struct RecordingView: View {
                     .font(.footnote)
                     .foregroundStyle(.orange)
             }
+            if model.isDegraded {
+                Label(
+                    "Audio is backlogged — some audio may be skipped.",
+                    systemImage: "exclamationmark.triangle.fill"
+                )
+                .font(.footnote)
+                .foregroundStyle(.orange)
+                .accessibilityLabel("Warning: audio capture is degraded")
+            }
             if model.status == .preparing {
                 ProgressView("Preparing on-device model…")
                     .font(.footnote)
@@ -87,6 +102,11 @@ struct RecordingView: View {
             .buttonStyle(.borderedProminent)
             .tint(model.isRecording ? .red : .accentColor)
             .disabled(model.status == .stopping || model.status == .preparing)
+            .accessibilityHint(
+                model.isRecording
+                    ? "Stops the capture and saves the meeting"
+                    : "Starts live on-device transcription"
+            )
         }
         .padding()
         .background(.bar)

@@ -2,8 +2,9 @@
 //  MeetingDetailView.swift
 //  OmniMind
 //
-//  Read view of one persisted meeting: AI summary (Pro) on top,
-//  timestamped transcript segments below.
+//  Read view of one persisted meeting: AI summary (Pro) on top, transcript
+//  below — paged through SegmentPager (§5.1: long meetings render in
+//  windows, never as one materialized relationship walk). Export is Pro.
 //
 
 import SwiftData
@@ -14,21 +15,21 @@ struct MeetingDetailView: View {
 
     @Environment(\.modelContext) private var modelContext
     @Environment(EntitlementStore.self) private var entitlements
+    @State private var segments: [Segment] = []
+    @State private var hasMore = false
+    @State private var loaded = false
     @State private var summary: MeetingSynthesizer.Output?
     @State private var summarizing = false
     @State private var showingPaywall = false
-
-    private var orderedSegments: [Segment] {
-        meeting.segments.sorted { $0.startTime < $1.startTime }
-    }
+    @State private var exportDocument: ExportDocument?
 
     var body: some View {
         List {
-            if !meeting.segments.isEmpty {
+            if !segments.isEmpty {
                 summarySection
             }
             Section {
-                ForEach(orderedSegments) { segment in
+                ForEach(segments) { segment in
                     VStack(alignment: .leading, spacing: 4) {
                         Text(Self.timestamp(segment.startTime))
                             .font(.caption.monospacedDigit())
@@ -36,6 +37,12 @@ struct MeetingDetailView: View {
                         Text(segment.text)
                     }
                     .padding(.vertical, 2)
+                    .accessibilityElement(children: .combine)
+                }
+                if hasMore {
+                    Button("Load More Segments") {
+                        loadNextPage()
+                    }
                 }
             } header: {
                 Text(meeting.startedAt, format: .dateTime.day().month().year().hour().minute())
@@ -43,11 +50,30 @@ struct MeetingDetailView: View {
         }
         .navigationTitle(meeting.title)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Export", systemImage: "square.and.arrow.up") {
+                    if entitlements.isPro {
+                        prepareExport()
+                    } else {
+                        showingPaywall = true
+                    }
+                }
+                .disabled(segments.isEmpty)
+                .accessibilityHint("Shares the full transcript as Markdown")
+            }
+        }
         .sheet(isPresented: $showingPaywall) {
             PaywallView()
         }
+        .sheet(item: $exportDocument) { document in
+            ExportSheet(text: document.text)
+        }
+        .task(id: meeting.id) {
+            loadFirstPage()
+        }
         .overlay {
-            if meeting.segments.isEmpty {
+            if loaded && segments.isEmpty {
                 ContentUnavailableView(
                     "Empty Meeting",
                     systemImage: "text.bubble",
@@ -56,6 +82,27 @@ struct MeetingDetailView: View {
             }
         }
     }
+
+    // MARK: - Paging (§5.1)
+
+    private func loadFirstPage() {
+        guard !loaded else { return }
+        segments = (try? SegmentPager.page(
+            in: modelContext, meetingID: meeting.id, offset: 0
+        )) ?? []
+        hasMore = segments.count == SegmentPager.pageSize
+        loaded = true
+    }
+
+    private func loadNextPage() {
+        let next = (try? SegmentPager.page(
+            in: modelContext, meetingID: meeting.id, offset: segments.count
+        )) ?? []
+        segments.append(contentsOf: next)
+        hasMore = next.count == SegmentPager.pageSize
+    }
+
+    // MARK: - Summary
 
     private var summarySection: some View {
         Section("Summary") {
@@ -67,6 +114,7 @@ struct MeetingDetailView: View {
                         .foregroundStyle(.tertiary)
                 }
                 .padding(.vertical, 2)
+                .accessibilityElement(children: .combine)
             } else if summarizing {
                 ProgressView("Summarizing on-device…")
             } else {
@@ -87,11 +135,33 @@ struct MeetingDetailView: View {
         let meetingID = meeting.id
         Task {
             let store = EmbeddingStore(modelContainer: container)
-            let segments = (try? await store.embeddedSegments(in: meetingID)) ?? []
-            let output = await MeetingSynthesizer().summarize(segments)
+            let embedded = (try? await store.embeddedSegments(in: meetingID)) ?? []
+            let output = await MeetingSynthesizer().summarize(embedded)
             summary = output.text.isEmpty ? nil : output
             summarizing = false
         }
+    }
+
+    // MARK: - Export
+
+    private func prepareExport() {
+        // Export intentionally reads the FULL transcript, page by page —
+        // a one-shot bounded loop, not a resident data structure.
+        var all: [(startTime: TimeInterval, text: String)] = []
+        var offset = 0
+        while let page = try? SegmentPager.page(
+            in: modelContext, meetingID: meeting.id, offset: offset
+        ), !page.isEmpty {
+            all.append(contentsOf: page.map { ($0.startTime, $0.text) })
+            offset += page.count
+            if page.count < SegmentPager.pageSize { break }
+        }
+        exportDocument = ExportDocument(text: TranscriptExporter.markdown(
+            title: meeting.title,
+            startedAt: meeting.startedAt,
+            endedAt: meeting.endedAt,
+            segments: all
+        ))
     }
 
     private static func timestamp(_ seconds: TimeInterval) -> String {
@@ -99,3 +169,32 @@ struct MeetingDetailView: View {
         return String(format: "%02d:%02d", total / 60, total % 60)
     }
 }
+
+private struct ExportDocument: Identifiable {
+    let id = UUID()
+    let text: String
+}
+
+/// Minimal share wrapper so ShareLink gets a fully rendered document.
+private struct ExportSheet: View {
+    let text: String
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                Text(text)
+                    .font(.footnote.monospaced())
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding()
+            }
+            .navigationTitle("Transcript Export")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    ShareLink(item: text)
+                }
+            }
+        }
+    }
+}
+
