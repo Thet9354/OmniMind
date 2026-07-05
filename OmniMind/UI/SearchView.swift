@@ -24,6 +24,8 @@ final class SearchViewModel {
     var query = ""
     private(set) var state: State = .idle
     private(set) var hits: [SearchHit] = []
+    private(set) var answer: MeetingSynthesizer.Output?
+    private(set) var answering = false
 
     private var store: EmbeddingStore?
 
@@ -35,6 +37,7 @@ final class SearchViewModel {
     func runSearch() async {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let store, !trimmed.isEmpty else { return }
+        answer = nil
         do {
             if await !store.isEmbedderReady {
                 state = .preparing
@@ -50,6 +53,16 @@ final class SearchViewModel {
         } catch {
             state = .failed(error.localizedDescription)
         }
+    }
+
+    /// Grounded answer over the current hits. No-ops (leaves hits visible)
+    /// when Apple Intelligence is unavailable on this hardware.
+    func askAI() async {
+        guard !hits.isEmpty, !answering else { return }
+        answering = true
+        defer { answering = false }
+        let context = ContextAssembler.assemble(hits: hits)
+        answer = await MeetingSynthesizer().answer(question: query, context: context)
     }
 }
 
@@ -95,21 +108,51 @@ struct SearchView: View {
     }
 
     private var resultsList: some View {
-        List(model.hits) { hit in
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Text(hit.meetingTitle)
-                        .font(.caption.bold())
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Text(String(format: "%.0f%%", max(0, hit.score) * 100))
-                        .font(.caption.monospacedDigit())
+        List {
+            answerSection
+            Section("Matches") {
+                ForEach(model.hits) { hit in
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text(hit.meetingTitle)
+                                .font(.caption.bold())
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Text(String(format: "%.0f%%", max(0, hit.score) * 100))
+                                .font(.caption.monospacedDigit())
+                                .foregroundStyle(.tertiary)
+                        }
+                        Text(hit.text)
+                            .lineLimit(4)
+                    }
+                    .padding(.vertical, 2)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var answerSection: some View {
+        if let answer = model.answer {
+            Section("Answer") {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(answer.text)
+                    Text("Generated on-device from the matches below.")
+                        .font(.caption2)
                         .foregroundStyle(.tertiary)
                 }
-                Text(hit.text)
-                    .lineLimit(4)
+                .padding(.vertical, 2)
             }
-            .padding(.vertical, 2)
+        } else if model.answering {
+            Section {
+                ProgressView("Thinking on-device…")
+            }
+        } else if !model.hits.isEmpty {
+            Section {
+                Button("Ask AI about these results", systemImage: "sparkles") {
+                    Task { await model.askAI() }
+                }
+            }
         }
     }
 }

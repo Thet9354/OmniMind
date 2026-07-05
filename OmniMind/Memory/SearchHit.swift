@@ -8,6 +8,12 @@
 
 import Foundation
 
+/// Segment DTO paired with its stored embedding, for synthesis.
+nonisolated struct EmbeddedSegment: Sendable, Equatable {
+    let segment: TranscriptSegment
+    let vector: [Float]?
+}
+
 nonisolated struct SearchHit: Sendable, Identifiable, Equatable {
     /// Segment id.
     let id: UUID

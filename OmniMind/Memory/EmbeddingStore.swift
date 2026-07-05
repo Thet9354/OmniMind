@@ -135,6 +135,29 @@ actor EmbeddingStore {
         try modelContext.save()
     }
 
+    /// Segments plus their stored vectors, for synthesis (summaries rank
+    /// by centroid similarity). Vector is nil for unembedded segments.
+    func embeddedSegments(in meetingID: UUID) throws -> [EmbeddedSegment] {
+        guard let meeting = try fetchMeeting(meetingID) else {
+            throw PersistenceError.meetingNotFound(meetingID)
+        }
+        return meeting.segments
+            .sorted { $0.startTime < $1.startTime }
+            .map { model in
+                EmbeddedSegment(
+                    segment: TranscriptSegment(
+                        id: model.id,
+                        text: model.text,
+                        startTime: model.startTime,
+                        endTime: model.endTime,
+                        confidence: model.confidence,
+                        capturedAt: model.capturedAt
+                    ),
+                    vector: model.embeddingDimension > 0 ? model.vector : nil
+                )
+            }
+    }
+
     /// Segments of a meeting as DTOs, ordered by start time.
     func segments(in meetingID: UUID) throws -> [TranscriptSegment] {
         guard let meeting = try fetchMeeting(meetingID) else {
