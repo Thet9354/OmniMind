@@ -17,6 +17,7 @@ struct RecordingView: View {
     /// Persisted accent/variant choice; non-US English speakers often get
     /// better recognition from their regional model.
     @AppStorage("transcriptionLocale") private var localeIdentifier = "en_US"
+    @AppStorage("keepAudio") private var keepAudio = true
     @State private var availableLocales: [Locale] = []
     @State private var autoFollow = true
 
@@ -31,6 +32,7 @@ struct RecordingView: View {
             .task {
                 model.attach(container: modelContext.container)
                 model.preferredLocaleIdentifier = localeIdentifier
+                model.keepAudioEnabled = keepAudio
                 // Pay model spin-up NOW, while the user reads the screen —
                 // Record then starts in milliseconds.
                 model.prewarm()
@@ -55,6 +57,11 @@ struct RecordingView: View {
 
     private var localeMenu: some View {
         Menu {
+            Toggle("Keep Audio for Replay", isOn: $keepAudio)
+                .onChange(of: keepAudio) { _, newValue in
+                    model.keepAudioEnabled = newValue
+                }
+            Divider()
             ForEach(availableLocales, id: \.identifier) { locale in
                 Button {
                     localeIdentifier = locale.identifier
@@ -69,10 +76,10 @@ struct RecordingView: View {
                 }
             }
         } label: {
-            Label("Accent", systemImage: "globe")
+            Label("Options", systemImage: "slider.horizontal.3")
         }
-        .disabled(model.isRecording || availableLocales.isEmpty)
-        .accessibilityHint("Choose the English variant that best matches the speakers")
+        .disabled(model.isRecording)
+        .accessibilityHint("Capture options: audio retention and accent")
     }
 
     private static func displayName(for locale: Locale) -> String {

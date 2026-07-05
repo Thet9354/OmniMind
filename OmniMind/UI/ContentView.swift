@@ -19,7 +19,9 @@ struct ContentView: View {
     @Environment(\.openURL) private var openURL
     @State private var showingRecorder = false
     @State private var showingSearch = false
+    @State private var showingChat = false
     @State private var showingPaywall = false
+    @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = false
 
     private var visibleMeetings: [Meeting] {
         entitlements.hasFullAccess
@@ -60,6 +62,12 @@ struct ContentView: View {
                     }
                 }
                 ToolbarItem(placement: .topBarLeading) {
+                    Button("Ask", systemImage: "bubble.left.and.text.bubble.right") {
+                        showingChat = true
+                    }
+                    .accessibilityHint("Chat with your meeting history")
+                }
+                ToolbarItem(placement: .topBarLeading) {
                     Button("Send Feedback", systemImage: "envelope") {
                         if let url = Self.feedbackURL() {
                             openURL(url)
@@ -81,6 +89,15 @@ struct ContentView: View {
             }
             .sheet(isPresented: $showingPaywall) {
                 PaywallView()
+            }
+            .sheet(isPresented: $showingChat) {
+                ChatView()
+            }
+            .fullScreenCover(isPresented: Binding(
+                get: { !hasSeenOnboarding },
+                set: { hasSeenOnboarding = !$0 }
+            )) {
+                OnboardingView { hasSeenOnboarding = true }
             }
         }
     }
@@ -144,7 +161,9 @@ struct ContentView: View {
 
     private func deleteMeetings(at offsets: IndexSet) {
         for index in offsets {
-            modelContext.delete(visibleMeetings[index])   // cascade removes segments
+            let meeting = visibleMeetings[index]
+            AudioArchive.delete(for: meeting.id)      // retained audio goes too
+            modelContext.delete(meeting)              // cascade removes segments
         }
         try? modelContext.save()
     }

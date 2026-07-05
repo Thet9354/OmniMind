@@ -87,8 +87,10 @@ actor EmbeddingStore {
 
     // MARK: - Meetings
 
-    func createMeeting(title: String, startedAt: Date = .now) throws -> UUID {
-        let meeting = Meeting(title: title, startedAt: startedAt)
+    /// - Parameter id: caller-supplied so session-scoped artifacts created
+    ///   before the meeting row exists (the audio archive) share its identity.
+    func createMeeting(id: UUID = UUID(), title: String, startedAt: Date = .now) throws -> UUID {
+        let meeting = Meeting(id: id, title: title, startedAt: startedAt)
         modelContext.insert(meeting)
         try modelContext.save()
         return meeting.id
@@ -120,6 +122,7 @@ actor EmbeddingStore {
         }
         modelContext.delete(meeting)   // cascade removes segments + vectors
         try modelContext.save()
+        AudioArchive.delete(for: id)   // retained audio goes with the meeting
     }
 
     // MARK: - Segments

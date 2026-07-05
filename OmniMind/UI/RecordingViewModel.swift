@@ -39,6 +39,9 @@ final class RecordingViewModel {
     private(set) var pendingChunkText = ""
     /// BCP-47-ish identifier for the transcription locale (accent variant).
     var preferredLocaleIdentifier = "en_US"
+    /// Whether to retain the meeting's audio for tap-to-replay (set from
+    /// the view's @AppStorage before each session).
+    var keepAudioEnabled = true
     /// Instantaneous input loudness (0...1) for the live level meter.
     private(set) var audioLevel: Float = 0
     /// Set when recording actually starts; drives the elapsed timer.
@@ -51,6 +54,9 @@ final class RecordingViewModel {
     private var healthTask: Task<Void, Never>?
     private var store: EmbeddingStore?
     private var meetingID: UUID?
+    /// Fixed at start() so the audio archive (which begins before the
+    /// meeting row exists) shares the meeting's eventual identity.
+    private var sessionID = UUID()
     private var coalescer = SegmentCoalescer()
     /// Built ahead of the Record tap so starting is a switch-flip, not a
     /// model spin-up. Consumed per session (analyzers are single-use).
@@ -99,6 +105,7 @@ final class RecordingViewModel {
         persistenceWarning = nil
         droppedBuffers = 0
         meetingID = nil
+        sessionID = UUID()
         coalescer.reset()
         sessionTask = Task { await runSession() }
     }
@@ -159,7 +166,10 @@ final class RecordingViewModel {
             UIApplication.shared.isIdleTimerDisabled = true
             startHealthPolling(for: capture)
 
-            for try await update in await transcription.transcribe(buffers) {
+            let archiveURL = keepAudioEnabled ? AudioArchive.url(for: sessionID) : nil
+            for try await update in await transcription.transcribe(
+                buffers, archivingTo: archiveURL
+            ) {
                 switch update {
                 case .audioLevel(let level):
                     audioLevel = level
@@ -181,6 +191,10 @@ final class RecordingViewModel {
                 await persistFinal(remainder)
             }
             pendingChunkText = ""
+            if meetingID == nil {
+                // Session produced no meeting — don't strand its audio.
+                AudioArchive.delete(for: sessionID)
+            }
             await closeMeeting()
             status = .idle
         } catch let error as TranscriptionError {
@@ -211,6 +225,7 @@ final class RecordingViewModel {
         do {
             if meetingID == nil {
                 meetingID = try await store.createMeeting(
+                    id: sessionID,
                     title: Self.defaultTitle(for: .now)
                 )
             }

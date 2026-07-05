@@ -7,6 +7,7 @@
 //  windows, never as one materialized relationship walk). Export is Pro.
 //
 
+import AVFAudio
 import SwiftData
 import SwiftUI
 
@@ -27,6 +28,8 @@ struct MeetingDetailView: View {
     @State private var extractingActions = false
     @State private var actionsUnavailable = false
     @State private var remindersStatus: String?
+    @State private var player: AVAudioPlayer?
+    @State private var isPlaying = false
     @State private var showingPaywall = false
     @State private var exportDocument: ExportDocument?
 
@@ -38,15 +41,37 @@ struct MeetingDetailView: View {
                 cleanupSection
             }
             Section {
-                ForEach(segments) { segment in
+                ForEach(Array(segments.enumerated()), id: \.element.id) { index, segment in
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(Self.timestamp(segment.startTime))
-                            .font(.caption.monospacedDigit())
-                            .foregroundStyle(.secondary)
+                        // Gap-based turn marker: a silence long enough to
+                        // have closed a chunk usually means the floor changed.
+                        if index > 0,
+                           segment.startTime - segments[index - 1].endTime > 2.5 {
+                            Label("pause", systemImage: "ellipsis")
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                                .frame(maxWidth: .infinity, alignment: .center)
+                                .padding(.bottom, 2)
+                        }
+                        HStack(spacing: 6) {
+                            Text(Self.timestamp(segment.startTime))
+                                .font(.caption.monospacedDigit())
+                                .foregroundStyle(.secondary)
+                            if hasAudio {
+                                Image(systemName: "play.circle")
+                                    .font(.caption)
+                                    .foregroundStyle(.tint)
+                            }
+                        }
                         Text(segment.text)
                     }
                     .padding(.vertical, 2)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        if hasAudio { playFrom(segment.startTime) }
+                    }
                     .accessibilityElement(children: .combine)
+                    .accessibilityHint(hasAudio ? "Plays the audio from this moment" : "")
                 }
                 if hasMore {
                     Button("Load More Segments") {
@@ -55,11 +80,26 @@ struct MeetingDetailView: View {
                 }
             } header: {
                 Text(meeting.startedAt, format: .dateTime.day().month().year().hour().minute())
+            } footer: {
+                if hasAudio {
+                    Text("Tap any segment to replay its audio.")
+                }
             }
         }
         .navigationTitle(meeting.title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            if hasAudio {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(
+                        isPlaying ? "Pause" : "Play",
+                        systemImage: isPlaying ? "pause.circle" : "play.circle"
+                    ) {
+                        togglePlayback()
+                    }
+                    .accessibilityHint("Plays the meeting audio")
+                }
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Button("Export", systemImage: "square.and.arrow.up") {
                     if entitlements.hasFullAccess {
@@ -81,6 +121,10 @@ struct MeetingDetailView: View {
         .task(id: meeting.id) {
             loadFirstPage()
         }
+        .onDisappear {
+            player?.stop()
+            isPlaying = false
+        }
         .overlay {
             if loaded && segments.isEmpty {
                 ContentUnavailableView(
@@ -89,6 +133,41 @@ struct MeetingDetailView: View {
                     description: Text("No speech was captured in this session.")
                 )
             }
+        }
+    }
+
+    // MARK: - Playback
+
+    private var hasAudio: Bool {
+        AudioArchive.exists(for: meeting.id)
+    }
+
+    private func ensurePlayer() -> AVAudioPlayer? {
+        if let player { return player }
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
+        try? AVAudioSession.sharedInstance().setActive(true)
+        let loaded = try? AVAudioPlayer(contentsOf: AudioArchive.url(for: meeting.id))
+        player = loaded
+        return loaded
+    }
+
+    private func playFrom(_ time: TimeInterval) {
+        guard let player = ensurePlayer() else { return }
+        // The archive holds exactly the stream the analyzer timestamped,
+        // so segment offsets ARE file offsets.
+        player.currentTime = min(time, max(0, player.duration - 0.1))
+        player.play()
+        isPlaying = true
+    }
+
+    private func togglePlayback() {
+        guard let player = ensurePlayer() else { return }
+        if player.isPlaying {
+            player.pause()
+            isPlaying = false
+        } else {
+            player.play()
+            isPlaying = true
         }
     }
 

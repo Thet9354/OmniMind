@@ -53,13 +53,21 @@ actor TranscriptionActor {
     /// Runs the full pump: capture stream → format conversion → analyzer →
     /// typed updates. The returned stream finishes when the capture stream
     /// finishes (source stopped) and all pending results are finalized.
+    /// - Parameter archiveURL: when set, the converted audio is also
+    ///   encoded to AAC at this location (best-effort; never fails the
+    ///   transcription).
     func transcribe(
-        _ buffers: AudioBufferStream
+        _ buffers: AudioBufferStream,
+        archivingTo archiveURL: URL? = nil
     ) -> AsyncThrowingStream<TranscriptionUpdate, Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
                 do {
-                    try await self.run(buffers: buffers, continuation: continuation)
+                    try await self.run(
+                        buffers: buffers,
+                        archiveURL: archiveURL,
+                        continuation: continuation
+                    )
                     continuation.finish()
                 } catch {
                     continuation.finish(throwing: error)
@@ -71,6 +79,7 @@ actor TranscriptionActor {
 
     private func run(
         buffers: AudioBufferStream,
+        archiveURL: URL?,
         continuation: AsyncThrowingStream<TranscriptionUpdate, Error>.Continuation
     ) async throws {
         guard let analyzerFormat = await SpeechAnalyzer.bestAvailableAudioFormat(
@@ -98,6 +107,13 @@ actor TranscriptionActor {
 
         try await analyzer.start(inputSequence: inputSequence)
 
+        // Optional audio archival of the converted stream — the file's
+        // timeline therefore matches segment timestamps exactly.
+        var archiveWriter: AudioArchiveWriter?
+        if let archiveURL {
+            archiveWriter = try? AudioArchiveWriter(url: archiveURL, format: analyzerFormat)
+        }
+
         // Pump. The converter is keyed to the incoming buffer format and
         // rebuilt if it changes mid-stream (route change swapped the mic).
         var converter: AudioFormatConverter?
@@ -112,6 +128,7 @@ actor TranscriptionActor {
             let converted = try converter.convert(buffer)
             if converted.frameLength > 0 {
                 continuation.yield(.audioLevel(AudioLevel.normalizedLevel(of: converted)))
+                try? archiveWriter?.write(converted)
                 inputBuilder.yield(AnalyzerInput(buffer: converted))
             }
         }
@@ -119,6 +136,7 @@ actor TranscriptionActor {
         // Capture ended: drain the SRC tail (final ~15 ms of speech), close
         // the input, and force the analyzer to finalize pending volatiles.
         if let tail = try converter?.flush(), tail.frameLength > 0 {
+            try? archiveWriter?.write(tail)
             inputBuilder.yield(AnalyzerInput(buffer: tail))
         }
         inputBuilder.finish()
