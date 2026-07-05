@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import SwiftData
 import Testing
 @testable import OmniMind
 
@@ -123,6 +124,51 @@ struct PilotModeTests {
     func cleanupEmptyIsNil() async {
         let result = await MeetingSynthesizer().cleanTranscript([])
         #expect(result == nil)
+    }
+
+    @Test("Auto-title sanitizer: quotes, punctuation, and length are tamed")
+    func titleSanitizer() {
+        #expect(MeetingSynthesizer.sanitizedTitle(from: "\"Q3 Budget Review\"")
+                == "Q3 Budget Review")
+        #expect(MeetingSynthesizer.sanitizedTitle(from: "Pac-Man Coding Lesson.")
+                == "Pac-Man Coding Lesson")
+        #expect(MeetingSynthesizer.sanitizedTitle(
+            from: "Here is the title:\nSprint Planning Sync\nHope that helps!"
+        ) == "Sprint Planning Sync")
+        // Hard cap at eight words.
+        let rambling = MeetingSynthesizer.sanitizedTitle(
+            from: "A very long meandering title that keeps going on and on forever"
+        )
+        #expect(rambling?.split(separator: " ").count == 8)
+        // Garbage in → nil, keep the date title.
+        #expect(MeetingSynthesizer.sanitizedTitle(from: "  \"\" ") == nil)
+    }
+
+    @Test("Auto-title and action items degrade to nil without the model")
+    func titleAndActionsDegrade() async {
+        let synthesizer = MeetingSynthesizer(forceExtractive: true)
+        let segments = [
+            TranscriptSegment(
+                text: "John will send the budget forecast by Friday.",
+                startTime: 0, endTime: 4, confidence: 0.9
+            )
+        ]
+        #expect(await synthesizer.title(for: segments) == nil)
+        #expect(await synthesizer.actionItems(from: segments) == nil)
+    }
+
+    @Test("renameMeeting replaces the title; blank titles are ignored")
+    func renameMeeting() async throws {
+        let container = try ModelContainerFactory.make(inMemory: true)
+        let store = EmbeddingStore(modelContainer: container)
+        let id = try await store.createMeeting(title: "Capture 5 Jul 2026")
+
+        try await store.renameMeeting(id, title: "Pilot Kickoff")
+        try await store.renameMeeting(id, title: "   ")   // ignored
+
+        let context = ModelContext(container)
+        let meeting = try #require(try context.fetch(FetchDescriptor<Meeting>()).first)
+        #expect(meeting.title == "Pilot Kickoff")
     }
 
     @Test("LLM preamble chatter is stripped; substantive text is untouched")

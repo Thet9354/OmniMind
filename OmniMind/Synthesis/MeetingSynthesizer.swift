@@ -11,6 +11,32 @@
 import Foundation
 import FoundationModels
 
+/// An action item surfaced from a meeting — the Sendable DTO the UI and
+/// Reminders export consume.
+nonisolated struct ExtractedActionItem: Sendable, Identifiable {
+    let id = UUID()
+    let task: String
+    let owner: String?
+    let due: String?
+}
+
+/// Constrained-generation schema: the model must produce this shape.
+@Generable
+nonisolated private struct GeneratedActionItems {
+    @Guide(description: "Concrete tasks someone committed to in the meeting. Empty if none were stated.")
+    var items: [GeneratedActionItem]
+}
+
+@Generable
+nonisolated private struct GeneratedActionItem {
+    @Guide(description: "The task as a short imperative sentence, faithful to what was said")
+    var task: String
+    @Guide(description: "The person responsible, only if explicitly stated")
+    var owner: String?
+    @Guide(description: "The deadline or timeframe, only if explicitly stated")
+    var due: String?
+}
+
 actor MeetingSynthesizer {
     enum Method: String, Sendable {
         case foundationModel = "On-device AI"
@@ -63,6 +89,75 @@ actor MeetingSynthesizer {
             text: ExtractiveSummarizer.summarize(entries: entries),
             method: .extractive
         )
+    }
+
+    // MARK: - Auto-title
+
+    /// A ≤8-word meaningful name for the meeting, replacing the timestamp
+    /// filename. nil (model unavailable / unusable reply) keeps the default.
+    func title(for segments: [TranscriptSegment]) async -> String? {
+        guard foundationModelUsable, !segments.isEmpty else { return nil }
+        let transcript = ContextAssembler.clip(
+            segments.map(\.text).joined(separator: "\n"),
+            toTokens: 1_500
+        )
+        guard let raw = await generate(
+            instructions: """
+            You name meeting transcripts. Reply with a short descriptive \
+            title of at most six words — no quotes, no trailing punctuation, \
+            no preamble, nothing but the title.
+            """,
+            prompt: "Name this meeting:\n\n\(transcript)"
+        ) else { return nil }
+        return Self.sanitizedTitle(from: raw)
+    }
+
+    /// Defensive post-processing: first line only, wrapping quotes and
+    /// trailing punctuation stripped, hard word cap.
+    nonisolated static func sanitizedTitle(from raw: String) -> String? {
+        var text = strippingPreamble(from: raw)
+        text = text.components(separatedBy: .newlines).first ?? ""
+        text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        text = text.trimmingCharacters(
+            in: CharacterSet(charactersIn: "\"'“”‘’«»`.,:;!?")
+        )
+        let words = text.split(separator: " ")
+        if words.count > 8 {
+            text = words.prefix(8).joined(separator: " ")
+        }
+        text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return text.isEmpty ? nil : text
+    }
+
+    // MARK: - Action items
+
+    /// Tasks explicitly committed to in the meeting, via constrained
+    /// structured generation (@Generable — the model cannot return prose).
+    /// nil = model unavailable; empty = genuinely no action items.
+    func actionItems(from segments: [TranscriptSegment]) async -> [ExtractedActionItem]? {
+        guard foundationModelUsable, !segments.isEmpty else { return nil }
+        let transcript = ContextAssembler.clip(
+            segments.map(\.text).joined(separator: "\n"),
+            toTokens: 3_000
+        )
+        do {
+            let session = LanguageModelSession(instructions: """
+                You extract action items from meeting transcripts: concrete \
+                tasks that someone actually committed to doing. Only include \
+                tasks stated in the transcript — never invent, never pad. \
+                An empty list is the correct answer for a meeting with no \
+                commitments.
+                """)
+            let response = try await session.respond(
+                to: "Extract the action items from this transcript:\n\n\(transcript)",
+                generating: GeneratedActionItems.self
+            )
+            return response.content.items.map {
+                ExtractedActionItem(task: $0.task, owner: $0.owner, due: $0.due)
+            }
+        } catch {
+            return nil
+        }
     }
 
     // MARK: - Transcript cleanup (accent/ASR-garble repair)

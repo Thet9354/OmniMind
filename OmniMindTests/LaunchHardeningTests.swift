@@ -39,7 +39,15 @@ struct LaunchHardeningTests {
         let info = Bundle.main.infoDictionary
         let mic = info?["NSMicrophoneUsageDescription"] as? String ?? ""
         let speech = info?["NSSpeechRecognitionUsageDescription"] as? String ?? ""
+        let reminders = info?["NSRemindersFullAccessUsageDescription"] as? String ?? ""
         #expect(mic.contains("on this device"))
         #expect(speech.contains("on-device"))
+        #expect(reminders.contains("only when you ask"))
+    }
+
+    @Test("Background audio mode is declared — capture survives lock/app-switch")
+    func backgroundAudioDeclared() {
+        let modes = Bundle.main.infoDictionary?["UIBackgroundModes"] as? [String] ?? []
+        #expect(modes.contains("audio"))
     }
 }

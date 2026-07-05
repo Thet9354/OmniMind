@@ -94,6 +94,18 @@ actor EmbeddingStore {
         return meeting.id
     }
 
+    /// Auto-titling replaces the timestamp filename with meaning once the
+    /// meeting closes; a failed rename keeps the date-based title.
+    func renameMeeting(_ id: UUID, title: String) throws {
+        guard let meeting = try fetchMeeting(id) else {
+            throw PersistenceError.meetingNotFound(id)
+        }
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        meeting.title = trimmed
+        try modelContext.save()
+    }
+
     func endMeeting(_ id: UUID, at date: Date = .now) throws {
         guard let meeting = try fetchMeeting(id) else {
             throw PersistenceError.meetingNotFound(id)

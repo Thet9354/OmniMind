@@ -16,6 +16,16 @@ No audio or text ever leaves the device; the app has no server.
 - **Speech recognition (NSSpeechRecognitionUsageDescription):** converts
   the captured audio to text using on-device recognition. No audio is
   sent to Apple servers by the app (on-device SpeechAnalyzer models).
+- **Background audio (UIBackgroundModes: audio):** meetings routinely
+  outlast the screen — capture must continue while the device is locked
+  or the user switches apps mid-meeting. Recording only ever starts from
+  an explicit user tap; iOS shows the system recording indicator the
+  entire time. No playback, no audio is stored or transmitted.
+- **Reminders (NSRemindersFullAccessUsageDescription):** the app can
+  extract action items from a meeting (on-device) and, only when the
+  user taps "Add All to Reminders", write them to the default Reminders
+  list. Access is requested at that moment, never at launch. Nothing is
+  read back beyond what EventKit requires to save.
 
 ## Demo script for review
 

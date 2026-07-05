@@ -23,6 +23,10 @@ struct MeetingDetailView: View {
     @State private var cleaned: MeetingSynthesizer.Output?
     @State private var cleaning = false
     @State private var cleanupUnavailable = false
+    @State private var actionItems: [ExtractedActionItem]?
+    @State private var extractingActions = false
+    @State private var actionsUnavailable = false
+    @State private var remindersStatus: String?
     @State private var showingPaywall = false
     @State private var exportDocument: ExportDocument?
 
@@ -30,6 +34,7 @@ struct MeetingDetailView: View {
         List {
             if !segments.isEmpty {
                 summarySection
+                actionItemsSection
                 cleanupSection
             }
             Section {
@@ -129,6 +134,80 @@ struct MeetingDetailView: View {
                         showingPaywall = true
                     }
                 }
+            }
+        }
+    }
+
+    // MARK: - Action items
+
+    @ViewBuilder
+    private var actionItemsSection: some View {
+        Section("Action Items") {
+            if let actionItems {
+                if actionItems.isEmpty {
+                    Text("No commitments were made in this meeting.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(actionItems) { item in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Label(item.task, systemImage: "circle")
+                            if item.owner != nil || item.due != nil {
+                                Text([item.owner, item.due]
+                                    .compactMap(\.self)
+                                    .joined(separator: " · "))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .padding(.leading, 28)
+                            }
+                        }
+                        .accessibilityElement(children: .combine)
+                    }
+                    Button("Add All to Reminders", systemImage: "checklist") {
+                        exportToReminders(actionItems)
+                    }
+                    if let remindersStatus {
+                        Text(remindersStatus)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            } else if extractingActions {
+                ProgressView("Finding action items on-device…")
+            } else if actionsUnavailable {
+                Text("Action-item extraction needs Apple Intelligence on this device.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            } else {
+                Button("Find Action Items", systemImage: "checklist") {
+                    extractActionItems()
+                }
+            }
+        }
+    }
+
+    private func extractActionItems() {
+        extractingActions = true
+        let container = modelContext.container
+        let meetingID = meeting.id
+        Task {
+            let store = EmbeddingStore(modelContainer: container)
+            let all = (try? await store.segments(in: meetingID)) ?? []
+            let items = await MeetingSynthesizer().actionItems(from: all)
+            actionItems = items
+            actionsUnavailable = items == nil
+            extractingActions = false
+        }
+    }
+
+    private func exportToReminders(_ items: [ExtractedActionItem]) {
+        let title = meeting.title
+        Task {
+            do {
+                let count = try await RemindersExporter.export(items, sourceTitle: title)
+                remindersStatus = "Added \(count) reminder\(count == 1 ? "" : "s")."
+            } catch {
+                remindersStatus = "Reminders access is needed — enable it in Settings › Privacy."
             }
         }
     }

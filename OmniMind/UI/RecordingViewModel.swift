@@ -225,6 +225,18 @@ final class RecordingViewModel {
     private func closeMeeting() async {
         guard let store, let meetingID else { return }
         try? await store.endMeeting(meetingID)
+
+        // Auto-title: replace "Capture <date>" with meaning. Fire-and-forget
+        // so Stop feels instant; the list row renames itself moments later
+        // via @Query observation. nil (no model) keeps the date title.
+        let id = meetingID
+        Task {
+            let segments = (try? await store.segments(in: id)) ?? []
+            guard !segments.isEmpty else { return }
+            if let title = await MeetingSynthesizer().title(for: segments) {
+                try? await store.renameMeeting(id, title: title)
+            }
+        }
     }
 
     private nonisolated static func defaultTitle(for date: Date) -> String {
