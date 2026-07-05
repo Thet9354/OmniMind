@@ -16,6 +16,10 @@ nonisolated enum ModelContainerFactory {
             schema: schema,
             isStoredInMemoryOnly: inMemory
         )
-        return try ModelContainer(for: schema, configurations: [configuration])
+        return try ModelContainer(
+            for: schema,
+            migrationPlan: OmniMindMigrationPlan.self,
+            configurations: [configuration]
+        )
     }
 }

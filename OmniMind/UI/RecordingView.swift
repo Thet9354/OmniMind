@@ -6,11 +6,13 @@
 //  hypothesis renders once at the bottom in secondary style.
 //
 
+import SwiftData
 import SwiftUI
 
 struct RecordingView: View {
     @State private var model = RecordingViewModel()
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
 
     var body: some View {
         NavigationStack {
@@ -20,6 +22,7 @@ struct RecordingView: View {
             }
             .navigationTitle("Live Capture")
             .navigationBarTitleDisplayMode(.inline)
+            .task { model.attach(container: modelContext.container) }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") { dismiss() }
@@ -60,6 +63,11 @@ struct RecordingView: View {
                     .font(.footnote)
                     .foregroundStyle(.red)
                     .multilineTextAlignment(.center)
+            }
+            if let warning = model.persistenceWarning {
+                Text(warning)
+                    .font(.footnote)
+                    .foregroundStyle(.orange)
             }
             if model.status == .preparing {
                 ProgressView("Preparing on-device model…")

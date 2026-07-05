@@ -46,6 +46,7 @@ nonisolated final class Segment {
     var startTime: TimeInterval
     var endTime: TimeInterval
     var confidence: Double
+    var capturedAt: Date
     var meeting: Meeting?
 
     @Attribute(.externalStorage) var embeddingData: Data
@@ -57,6 +58,7 @@ nonisolated final class Segment {
         startTime: TimeInterval,
         endTime: TimeInterval,
         confidence: Double,
+        capturedAt: Date = .now,
         embeddingData: Data = Data(),
         embeddingDimension: Int = 0
     ) {
@@ -65,6 +67,7 @@ nonisolated final class Segment {
         self.startTime = startTime
         self.endTime = endTime
         self.confidence = confidence
+        self.capturedAt = capturedAt
         self.embeddingData = embeddingData
         self.embeddingDimension = embeddingDimension
     }

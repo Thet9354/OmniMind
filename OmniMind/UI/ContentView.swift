@@ -12,6 +12,7 @@ import SwiftData
 struct ContentView: View {
     @Query(sort: \Meeting.startedAt, order: .reverse)
     private var meetings: [Meeting]
+    @Environment(\.modelContext) private var modelContext
     @State private var showingRecorder = false
 
     var body: some View {
@@ -26,14 +27,23 @@ struct ContentView: View {
                         )
                     )
                 } else {
-                    List(meetings) { meeting in
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(meeting.title)
-                                .font(.headline)
-                            Text(meeting.startedAt, format: .dateTime)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                    List {
+                        ForEach(meetings) { meeting in
+                            NavigationLink {
+                                MeetingDetailView(meeting: meeting)
+                            } label: {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(meeting.title)
+                                        .font(.headline)
+                                    Text(
+                                        "\(meeting.startedAt, format: .dateTime) · \(meeting.segments.count) segments"
+                                    )
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                }
+                            }
                         }
+                        .onDelete(perform: deleteMeetings)
                     }
                 }
             }
@@ -49,6 +59,13 @@ struct ContentView: View {
                 RecordingView()
             }
         }
+    }
+
+    private func deleteMeetings(at offsets: IndexSet) {
+        for index in offsets {
+            modelContext.delete(meetings[index])   // cascade removes segments
+        }
+        try? modelContext.save()
     }
 }
 

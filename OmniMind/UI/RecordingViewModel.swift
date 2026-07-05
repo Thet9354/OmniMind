@@ -10,6 +10,7 @@
 
 import AVFAudio
 import Observation
+import SwiftData
 
 @MainActor
 @Observable
@@ -25,18 +26,31 @@ final class RecordingViewModel {
     private(set) var status: Status = .idle
     /// The in-flight hypothesis. Replaced wholesale on every volatile update.
     private(set) var volatileText = ""
-    /// Finalized segments for the current session (persisted in Phase 3).
+    /// Finalized segments for the current session (mirrors what was persisted).
     private(set) var segments: [TranscriptSegment] = []
+    /// Non-fatal: capture keeps running even if a save fails.
+    private(set) var persistenceWarning: String?
 
     private var capture: AudioStreamActor?
     private var sessionTask: Task<Void, Never>?
+    private var store: EmbeddingStore?
+    private var meetingID: UUID?
 
     var isRecording: Bool { status == .recording || status == .preparing }
+
+    /// Called once from the view with the app's container. Without a store
+    /// (e.g. previews) the session still runs, capture-only.
+    func attach(container: ModelContainer) {
+        guard store == nil else { return }
+        store = EmbeddingStore(modelContainer: container)
+    }
 
     func start() {
         guard sessionTask == nil else { return }
         segments.removeAll()
         volatileText = ""
+        persistenceWarning = nil
+        meetingID = nil
         sessionTask = Task { await runSession() }
     }
 
@@ -74,8 +88,10 @@ final class RecordingViewModel {
                 case .finalized(let segment):
                     segments.append(segment)
                     volatileText = ""
+                    await persistFinal(segment)
                 }
             }
+            await closeMeeting()
             status = .idle
         } catch let error as TranscriptionError {
             status = .failed(Self.message(for: error))
@@ -84,6 +100,33 @@ final class RecordingViewModel {
             status = .failed(error.localizedDescription)
             await capture?.stop()
         }
+    }
+
+    /// Lazily creates the meeting on the FIRST final — abandoned sessions
+    /// that never produced speech leave no empty rows behind.
+    private func persistFinal(_ segment: TranscriptSegment) async {
+        guard let store else { return }
+        do {
+            if meetingID == nil {
+                meetingID = try await store.createMeeting(
+                    title: Self.defaultTitle(for: .now)
+                )
+            }
+            if let meetingID {
+                try await store.persist(segment, into: meetingID)
+            }
+        } catch {
+            persistenceWarning = "Some segments couldn't be saved."
+        }
+    }
+
+    private func closeMeeting() async {
+        guard let store, let meetingID else { return }
+        try? await store.endMeeting(meetingID)
+    }
+
+    private nonisolated static func defaultTitle(for date: Date) -> String {
+        "Capture \(date.formatted(date: .abbreviated, time: .shortened))"
     }
 
     private nonisolated static func message(for error: TranscriptionError) -> String {
