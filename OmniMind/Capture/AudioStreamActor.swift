@@ -80,11 +80,14 @@ actor AudioStreamActor: AudioCapturing {
 
     private func configureSession() throws {
         let session = AVAudioSession.sharedInstance()
-        // .measurement gives the flattest input path for ASR; ducking keeps
-        // other audio audible but secondary during capture.
+        // .default mode keeps the OS input chain (auto-gain, noise
+        // suppression) ACTIVE. Pilot feedback showed speakers a metre or
+        // more from the phone — AGC is what compensates for that distance.
+        // (.measurement, the previous choice, disables all of it and is
+        // only right for close-talk dictation.)
         try session.setCategory(
             .playAndRecord,
-            mode: .measurement,
+            mode: .default,
             options: [.duckOthers, .allowBluetoothHFP]
         )
         try session.setActive(true, options: .notifyOthersOnDeactivation)

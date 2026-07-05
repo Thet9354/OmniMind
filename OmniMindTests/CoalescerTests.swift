@@ -124,4 +124,27 @@ struct PilotModeTests {
         let result = await MeetingSynthesizer().cleanTranscript([])
         #expect(result == nil)
     }
+
+    @Test("LLM preamble chatter is stripped; substantive text is untouched")
+    func preambleStripped() {
+        // The exact leak observed in on-device testing (2026-07-05).
+        let leaked = """
+        I apologize for the mistake. Here is the repaired transcript:
+
+        Is saying I have 13 mistakes. Line 31, brackets expected.
+        So we say Eve? Teacher? Oh, it's 15.
+        """
+        let stripped = MeetingSynthesizer.strippingPreamble(from: leaked)
+        #expect(stripped.hasPrefix("Is saying I have 13 mistakes."))
+        #expect(stripped.contains("So we say Eve?"))
+
+        // A clean reply passes through byte-identical.
+        let clean = "The meeting covered the budget.\nAction items follow."
+        #expect(MeetingSynthesizer.strippingPreamble(from: clean) == clean)
+
+        // "Here is..." only counts as preamble when it reads like one —
+        // a transcript that genuinely STARTS with those words survives.
+        let legit = "Here is the plan we agreed on for Q3 and why it matters."
+        #expect(MeetingSynthesizer.strippingPreamble(from: legit) == legit)
+    }
 }

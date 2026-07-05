@@ -83,11 +83,43 @@ actor MeetingSynthesizer {
             words, grammar, and punctuation so the text reads naturally, \
             keeping the original meaning, speaker phrasing, and level of \
             detail. Never add information, never summarize, never omit \
-            content. Reply with the repaired transcript only.
+            content. Output the repaired transcript text directly, with no \
+            preamble, introduction, apology, or commentary of any kind.
             """,
             prompt: "Repair this transcript:\n\n\(transcript)"
         ) else { return nil }
-        return Output(text: cleaned, method: .foundationModel)
+        let stripped = Self.strippingPreamble(from: cleaned)
+        guard !stripped.isEmpty else { return nil }
+        return Output(text: stripped, method: .foundationModel)
+    }
+
+    /// Language models sometimes prefix output with chatter ("I apologize…",
+    /// "Here is the repaired transcript:") despite instructions. Drop such
+    /// leading lines; never touch anything past the first substantive line.
+    nonisolated static func strippingPreamble(from text: String) -> String {
+        var lines = text.split(separator: "\n", omittingEmptySubsequences: false)
+        let preambleMarkers = [
+            "i apologize", "i'm sorry", "here is", "here's", "sure,", "sure!",
+            "certainly", "of course", "below is", "the repaired transcript",
+            "okay, here",
+        ]
+        while let first = lines.first {
+            let trimmed = first.trimmingCharacters(in: .whitespaces)
+            if trimmed.isEmpty {
+                lines.removeFirst()
+                continue
+            }
+            let lowered = trimmed.lowercased()
+            let isPreamble = preambleMarkers.contains { lowered.hasPrefix($0) }
+                && (trimmed.hasSuffix(":") || lowered.contains("transcript"))
+            if isPreamble {
+                lines.removeFirst()
+                continue
+            }
+            break
+        }
+        return lines.joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     // MARK: - Grounded Q&A over retrieval results
