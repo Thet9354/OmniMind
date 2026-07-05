@@ -33,6 +33,11 @@ final class RecordingViewModel {
     private(set) var persistenceWarning: String?
     /// §5.2 backpressure telemetry, polled from the capture bridge.
     private(set) var droppedBuffers = 0
+    /// Finals accumulating toward the next persisted chunk — rendered
+    /// between the saved tail and the volatile hypothesis.
+    private(set) var pendingChunkText = ""
+    /// BCP-47-ish identifier for the transcription locale (accent variant).
+    var preferredLocaleIdentifier = "en_US"
 
     var isDegraded: Bool { droppedBuffers > 0 }
 
@@ -41,6 +46,7 @@ final class RecordingViewModel {
     private var healthTask: Task<Void, Never>?
     private var store: EmbeddingStore?
     private var meetingID: UUID?
+    private var coalescer = SegmentCoalescer()
 
     var isRecording: Bool { status == .recording || status == .preparing }
 
@@ -55,9 +61,11 @@ final class RecordingViewModel {
         guard sessionTask == nil else { return }
         liveTail.removeAll()
         volatileText = ""
+        pendingChunkText = ""
         persistenceWarning = nil
         droppedBuffers = 0
         meetingID = nil
+        coalescer.reset()
         sessionTask = Task { await runSession() }
     }
 
@@ -90,7 +98,9 @@ final class RecordingViewModel {
         }
 
         do {
-            let transcription = try await TranscriptionActor()
+            let transcription = try await TranscriptionActor(
+                locale: Locale(identifier: preferredLocaleIdentifier)
+            )
             let capture = AudioStreamActor()
             self.capture = capture
             let buffers = try await capture.bufferStream()
@@ -102,11 +112,21 @@ final class RecordingViewModel {
                 case .volatile(let text):
                     volatileText = text
                 case .finalized(let segment):
-                    liveTail.append(segment)
                     volatileText = ""
-                    await persistFinal(segment)
+                    // Finals route through the coalescer: only coherent
+                    // chunks reach the tail view and the store.
+                    for chunk in coalescer.ingest(segment) {
+                        liveTail.append(chunk)
+                        await persistFinal(chunk)
+                    }
+                    pendingChunkText = coalescer.pendingText
                 }
             }
+            if let remainder = coalescer.flush() {
+                liveTail.append(remainder)
+                await persistFinal(remainder)
+            }
+            pendingChunkText = ""
             await closeMeeting()
             status = .idle
         } catch let error as TranscriptionError {

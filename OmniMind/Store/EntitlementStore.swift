@@ -27,6 +27,12 @@ final class EntitlementStore {
 
     var isPro: Bool { activeTier == .pro }
 
+    /// What feature gates actually read. True for everyone during the
+    /// pilot; reverts to entitlement-driven when the pilot flag drops.
+    var hasFullAccess: Bool {
+        ProductCatalog.pilotUnlockEverything || activeTier == .pro
+    }
+
     // MARK: - Lifecycle
 
     /// Installs the lifetime Transaction.updates listener and reconciles

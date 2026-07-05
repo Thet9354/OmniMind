@@ -20,6 +20,9 @@ struct MeetingDetailView: View {
     @State private var loaded = false
     @State private var summary: MeetingSynthesizer.Output?
     @State private var summarizing = false
+    @State private var cleaned: MeetingSynthesizer.Output?
+    @State private var cleaning = false
+    @State private var cleanupUnavailable = false
     @State private var showingPaywall = false
     @State private var exportDocument: ExportDocument?
 
@@ -27,6 +30,7 @@ struct MeetingDetailView: View {
         List {
             if !segments.isEmpty {
                 summarySection
+                cleanupSection
             }
             Section {
                 ForEach(segments) { segment in
@@ -53,7 +57,7 @@ struct MeetingDetailView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button("Export", systemImage: "square.and.arrow.up") {
-                    if entitlements.isPro {
+                    if entitlements.hasFullAccess {
                         prepareExport()
                     } else {
                         showingPaywall = true
@@ -119,13 +123,55 @@ struct MeetingDetailView: View {
                 ProgressView("Summarizing on-device…")
             } else {
                 Button("Generate Summary", systemImage: "sparkles") {
-                    if entitlements.isPro {
+                    if entitlements.hasFullAccess {
                         generateSummary()
                     } else {
                         showingPaywall = true
                     }
                 }
             }
+        }
+    }
+
+    // MARK: - Cleanup
+
+    @ViewBuilder
+    private var cleanupSection: some View {
+        Section("Cleaned Transcript") {
+            if let cleaned {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(cleaned.text)
+                    Text("Repaired on-device — original segments below are untouched.")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+                .padding(.vertical, 2)
+                .accessibilityElement(children: .combine)
+            } else if cleaning {
+                ProgressView("Repairing transcript on-device…")
+            } else if cleanupUnavailable {
+                Text("Transcript cleanup needs Apple Intelligence on this device.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            } else {
+                Button("Clean Up Transcript", systemImage: "wand.and.sparkles") {
+                    cleanTranscript()
+                }
+            }
+        }
+    }
+
+    private func cleanTranscript() {
+        cleaning = true
+        let container = modelContext.container
+        let meetingID = meeting.id
+        Task {
+            let store = EmbeddingStore(modelContainer: container)
+            let all = (try? await store.segments(in: meetingID)) ?? []
+            let output = await MeetingSynthesizer().cleanTranscript(all)
+            cleaned = output
+            cleanupUnavailable = output == nil
+            cleaning = false
         }
     }
 

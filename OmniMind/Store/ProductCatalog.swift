@@ -22,6 +22,11 @@ nonisolated enum ProductCatalog {
     /// is Pro-only. Capture itself is never gated.
     static let freeMeetingLimit = 3
 
+    /// PILOT MODE: every feature is free while gathering tester feedback
+    /// (product decision, 2026-07). The StoreKit subsystem stays built and
+    /// tested underneath; flipping this to false re-arms all gates.
+    static let pilotUnlockEverything = true
+
     static func tier(unlockedBy productID: String) -> Tier {
         all.contains(productID) ? .pro : .free
     }

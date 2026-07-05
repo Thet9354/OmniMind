@@ -65,6 +65,31 @@ actor MeetingSynthesizer {
         )
     }
 
+    // MARK: - Transcript cleanup (accent/ASR-garble repair)
+
+    /// Rewrites the raw transcript into readable prose, fixing recognition
+    /// garbles — the strongest lever available for accented speech, since
+    /// the acoustic model itself is Apple's. Strictly repair-only prompting;
+    /// nil when the model is unavailable (the raw transcript stands).
+    func cleanTranscript(_ segments: [TranscriptSegment]) async -> Output? {
+        guard foundationModelUsable, !segments.isEmpty else { return nil }
+        let transcript = ContextAssembler.clip(
+            segments.map(\.text).joined(separator: "\n"),
+            toTokens: 3_000
+        )
+        guard let cleaned = await generate(
+            instructions: """
+            You repair speech-recognition transcripts. Fix misrecognized \
+            words, grammar, and punctuation so the text reads naturally, \
+            keeping the original meaning, speaker phrasing, and level of \
+            detail. Never add information, never summarize, never omit \
+            content. Reply with the repaired transcript only.
+            """,
+            prompt: "Repair this transcript:\n\n\(transcript)"
+        ) else { return nil }
+        return Output(text: cleaned, method: .foundationModel)
+    }
+
     // MARK: - Grounded Q&A over retrieval results
 
     /// nil when the foundation model is unavailable or the context is

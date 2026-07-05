@@ -21,13 +21,13 @@ struct ContentView: View {
     @State private var showingPaywall = false
 
     private var visibleMeetings: [Meeting] {
-        entitlements.isPro
+        entitlements.hasFullAccess
             ? meetings
             : Array(meetings.prefix(ProductCatalog.freeMeetingLimit))
     }
 
     private var lockedCount: Int {
-        entitlements.isPro
+        entitlements.hasFullAccess
             ? 0
             : max(0, meetings.count - ProductCatalog.freeMeetingLimit)
     }
@@ -51,7 +51,7 @@ struct ContentView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Search", systemImage: "sparkle.magnifyingglass") {
-                        if entitlements.isPro {
+                        if entitlements.hasFullAccess {
                             showingSearch = true
                         } else {
                             showingPaywall = true
