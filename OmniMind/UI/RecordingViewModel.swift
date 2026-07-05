@@ -74,6 +74,12 @@ final class RecordingViewModel {
             return
         }
 
+        // Warm the embedding model alongside the speech model. Non-fatal:
+        // segments persist unembedded and are backfilled when assets land.
+        if let store {
+            try? await store.prepareEmbedder()
+        }
+
         do {
             let transcription = try await TranscriptionActor()
             let capture = AudioStreamActor()

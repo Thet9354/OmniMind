@@ -20,6 +20,70 @@ nonisolated enum PersistenceError: Error, Equatable {
 
 @ModelActor
 actor EmbeddingStore {
+    /// Created by prepareEmbedder(). While nil, segments persist unembedded
+    /// (dimension 0) and are picked up by backfillEmbeddings() later — asset
+    /// unavailability must never block transcript durability (§5.5).
+    private var embedder: Embedder?
+
+    // MARK: - Embedder lifecycle
+
+    /// Idempotent. Downloads the contextual-embedding assets on first call;
+    /// failure leaves the store fully functional for persistence.
+    func prepareEmbedder() async throws {
+        guard embedder == nil else { return }
+        embedder = try await Embedder.prepare()
+    }
+
+    var isEmbedderReady: Bool { embedder != nil }
+
+    /// Embeds any segments persisted while the embedder was unavailable.
+    /// Returns the number of segments backfilled.
+    @discardableResult
+    func backfillEmbeddings() throws -> Int {
+        guard let embedder else { return 0 }
+        let missing = try modelContext.fetch(
+            FetchDescriptor<Segment>(predicate: #Predicate { $0.embeddingDimension == 0 })
+        )
+        var updated = 0
+        for segment in missing {
+            guard let vector = try? embedder.embed(segment.text) else { continue }
+            segment.embeddingData = vector.withUnsafeBytes { Data($0) }
+            segment.embeddingDimension = vector.count
+            updated += 1
+        }
+        if updated > 0 {
+            try modelContext.save()
+        }
+        return updated
+    }
+
+    // MARK: - Search (local RAG retrieval)
+
+    /// Brute-force cosine scan over the whole corpus with a bounded top-K
+    /// heap. O(n·d) SIMD work — sub-millisecond for tens of thousands of
+    /// segments (see the 50k perf gate). An ANN index is deliberately NOT
+    /// built at this scale.
+    func search(_ query: String, topK: Int = 8) throws -> [SearchHit] {
+        guard let embedder else { throw EmbeddingError.assetsUnavailable }
+        let queryVector = try embedder.embed(query)
+
+        let segments = try modelContext.fetch(FetchDescriptor<Segment>())
+        var heap = TopKHeap<SearchHit>(k: topK)
+        for segment in segments where segment.embeddingDimension == queryVector.count {
+            let score = VectorMath.dot(queryVector, segment.vector)
+            let hit = SearchHit(
+                id: segment.id,
+                meetingID: segment.meeting?.id ?? UUID(),
+                meetingTitle: segment.meeting?.title ?? "Untitled",
+                text: segment.text,
+                startTime: segment.startTime,
+                capturedAt: segment.capturedAt,
+                score: score
+            )
+            heap.insert(hit, score: score)
+        }
+        return heap.sortedDescending().map(\.element)
+    }
 
     // MARK: - Meetings
 
@@ -93,13 +157,24 @@ actor EmbeddingStore {
     // MARK: - Private
 
     private func insert(_ segment: TranscriptSegment, into meeting: Meeting) {
+        // Vector is generated here so it commits atomically with the row.
+        // Embedding failure (assets missing, empty text) degrades to an
+        // unembedded segment that backfillEmbeddings() repairs later.
+        var embeddingData = Data()
+        var dimension = 0
+        if let embedder, let vector = try? embedder.embed(segment.text) {
+            embeddingData = vector.withUnsafeBytes { Data($0) }
+            dimension = vector.count
+        }
         let model = Segment(
             id: segment.id,
             text: segment.text,
             startTime: segment.startTime,
             endTime: segment.endTime,
             confidence: segment.confidence,
-            capturedAt: segment.capturedAt
+            capturedAt: segment.capturedAt,
+            embeddingData: embeddingData,
+            embeddingDimension: dimension
         )
         model.meeting = meeting
         modelContext.insert(model)

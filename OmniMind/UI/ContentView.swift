@@ -14,6 +14,7 @@ struct ContentView: View {
     private var meetings: [Meeting]
     @Environment(\.modelContext) private var modelContext
     @State private var showingRecorder = false
+    @State private var showingSearch = false
 
     var body: some View {
         NavigationStack {
@@ -49,6 +50,11 @@ struct ContentView: View {
             }
             .navigationTitle("OmniMind")
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Search", systemImage: "sparkle.magnifyingglass") {
+                        showingSearch = true
+                    }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("New Capture", systemImage: "record.circle") {
                         showingRecorder = true
@@ -57,6 +63,9 @@ struct ContentView: View {
             }
             .sheet(isPresented: $showingRecorder) {
                 RecordingView()
+            }
+            .sheet(isPresented: $showingSearch) {
+                SearchView()
             }
         }
     }
