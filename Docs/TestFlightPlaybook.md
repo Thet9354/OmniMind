@@ -17,16 +17,25 @@ Select **"Data Not Collected."** That is the truthful answer for the whole
 app: no analytics, no identifiers, no server. The bundled
 `PrivacyInfo.xcprivacy` already matches this declaration.
 
-## 2.5 iCloud capability (one-time, required since Groups / Phase 14)
+## 2.5 iCloud capability — BLOCKED until Apple Developer Program enrollment
 
-Xcode → OmniMind target → Signing & Capabilities → **+ Capability →
-iCloud** → check **CloudKit** → container
-`iCloud.com.thetpine.workspace.OmniMind` (the entitlements file already
-references it; adding the capability registers the container on the
-team). Without this, device builds fail signing and Groups can't reach
-CloudKit. The CloudKit **schema** deploys just-in-time in Development;
-before external TestFlight, open the CloudKit Console and **deploy the
-schema to Production** (Development → Deploy Schema Changes).
+Groups (Phase 14) needs CloudKit, and **free Personal Teams do not
+support the iCloud capability** (TestFlight/App Store distribution
+needs the paid program anyway, so enrollment is on the critical path
+regardless: developer.apple.com/programs, US$99/yr, ~1–2 days).
+
+Until then Groups is dormant (`GroupsFeature.enabled = false`,
+entitlements removed from build settings) and device builds sign fine.
+
+After enrollment, re-arm:
+1. Xcode → OmniMind target → Signing & Capabilities → select the paid
+   team → **+ Capability → iCloud** → check **CloudKit** → container
+   `iCloud.com.thetpine.workspace.OmniMind` (`Config/OmniMind.entitlements`
+   is already in the repo).
+2. Flip `GroupsFeature.enabled` to `true`.
+3. The CloudKit **schema** deploys just-in-time in Development; before
+   external TestFlight, open the CloudKit Console and **deploy the
+   schema to Production** (Development → Deploy Schema Changes).
 
 ## 3. Upload a build
 

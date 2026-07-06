@@ -16,6 +16,21 @@
 import CloudKit
 import Foundation
 
+/// GROUPS ARE DORMANT until a paid Apple Developer team is active —
+/// Apple does not allow the iCloud/CloudKit capability on free personal
+/// teams, and with the entitlement absent, constructing a CKContainer
+/// aborts the process. The whole subsystem is built and tested underneath
+/// (same pattern as the dormant StoreKit paywall).
+///
+/// Re-arm procedure (after enrolling / selecting a paid team):
+///  1. Xcode → target → Signing & Capabilities → + iCloud → CloudKit
+///     (this re-adds CODE_SIGN_ENTITLEMENTS pointing at
+///     Config/OmniMind.entitlements, which is already in the repo).
+///  2. Flip `enabled` to true.
+nonisolated enum GroupsFeature {
+    static let enabled = false
+}
+
 nonisolated enum GroupSchema {
     static let containerID = "iCloud.com.thetpine.workspace.OmniMind"
     /// Group zones are namespaced so unrelated zones (e.g. a future

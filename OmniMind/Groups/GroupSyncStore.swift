@@ -23,10 +23,14 @@ nonisolated enum GroupSyncError: Error {
 }
 
 actor GroupSyncStore {
-    private let container: CKContainer
+    private let containerID: String
+    /// Constructed on first CloudKit touch, not at init: without the
+    /// iCloud entitlement (dormant Groups), CKContainer(identifier:)
+    /// aborts the process — deferral keeps mere construction safe.
+    private lazy var container = CKContainer(identifier: containerID)
 
     init(containerID: String = GroupSchema.containerID) {
-        container = CKContainer(identifier: containerID)
+        self.containerID = containerID
     }
 
     private var privateDB: CKDatabase { container.privateCloudDatabase }

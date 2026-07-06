@@ -68,11 +68,13 @@ struct ContentView: View {
                     }
                     .accessibilityHint("Chat with your meeting history")
                 }
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Groups", systemImage: "person.3") {
-                        showingGroups = true
+                if GroupsFeature.enabled {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button("Groups", systemImage: "person.3") {
+                            showingGroups = true
+                        }
+                        .accessibilityHint("Shared meeting libraries for teams, classes, and projects")
                     }
-                    .accessibilityHint("Shared meeting libraries for teams, classes, and projects")
                 }
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Send Feedback", systemImage: "envelope") {

@@ -16,6 +16,9 @@ final class OmniMindAppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         userDidAcceptCloudKitShareWith cloudKitShareMetadata: CKShare.Metadata
     ) {
+        // Without the CloudKit entitlement (dormant Groups), touching
+        // CKContainer aborts — and no invite can arrive anyway.
+        guard GroupsFeature.enabled else { return }
         Task {
             try? await GroupSyncStore().acceptShare(from: cloudKitShareMetadata)
             NotificationCenter.default.post(name: .omniMindGroupInviteAccepted, object: nil)
