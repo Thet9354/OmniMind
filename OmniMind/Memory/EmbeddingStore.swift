@@ -16,6 +16,9 @@ import SwiftData
 
 nonisolated enum PersistenceError: Error, Equatable {
     case meetingNotFound(UUID)
+    /// Bundle import found the meeting already in the library (IDs are
+    /// preserved across devices exactly so re-imports are detectable).
+    case meetingAlreadyExists(UUID)
 }
 
 @ModelActor
@@ -176,6 +179,74 @@ actor EmbeddingStore {
         }
         meeting.actionItemsData = try JSONEncoder().encode(items)
         try modelContext.save()
+    }
+
+    // MARK: - Meeting bundles (serverless sharing)
+
+    /// Everything a portable bundle carries, as one Sendable DTO. Vectors
+    /// are intentionally omitted — the importing device re-embeds via
+    /// backfillEmbeddings().
+    func exportBundle(for meetingID: UUID) throws -> MeetingBundle {
+        guard let meeting = try fetchMeeting(meetingID) else {
+            throw PersistenceError.meetingNotFound(meetingID)
+        }
+        return MeetingBundle(
+            id: meeting.id,
+            title: meeting.title,
+            startedAt: meeting.startedAt,
+            endedAt: meeting.endedAt,
+            summaryText: meeting.summaryText,
+            summaryMethod: meeting.summaryMethod,
+            cleanedTranscript: meeting.cleanedTranscript,
+            actionItems: meeting.actionItemsData.flatMap {
+                try? JSONDecoder().decode([ExtractedActionItem].self, from: $0)
+            },
+            segments: meeting.segments
+                .sorted { $0.startTime < $1.startTime }
+                .map {
+                    MeetingBundle.BundleSegment(
+                        id: $0.id,
+                        text: $0.text,
+                        startTime: $0.startTime,
+                        endTime: $0.endTime,
+                        confidence: $0.confidence,
+                        capturedAt: $0.capturedAt
+                    )
+                }
+        )
+    }
+
+    /// Recreates a received meeting, IDs preserved, in one atomic save.
+    /// Segments embed immediately when the embedder is ready and degrade
+    /// to unembedded rows otherwise — the same §5.5 contract as capture.
+    func importMeeting(_ bundle: MeetingBundle) throws -> UUID {
+        guard try fetchMeeting(bundle.id) == nil else {
+            throw PersistenceError.meetingAlreadyExists(bundle.id)
+        }
+        let meeting = Meeting(
+            id: bundle.id, title: bundle.title, startedAt: bundle.startedAt
+        )
+        meeting.endedAt = bundle.endedAt
+        meeting.summaryText = bundle.summaryText
+        meeting.summaryMethod = bundle.summaryMethod
+        meeting.cleanedTranscript = bundle.cleanedTranscript
+        meeting.actionItemsData = try bundle.actionItems.map(JSONEncoder().encode)
+        modelContext.insert(meeting)
+        for segment in bundle.segments {
+            insert(
+                TranscriptSegment(
+                    id: segment.id,
+                    text: segment.text,
+                    startTime: segment.startTime,
+                    endTime: segment.endTime,
+                    confidence: segment.confidence,
+                    capturedAt: segment.capturedAt
+                ),
+                into: meeting
+            )
+        }
+        try modelContext.save()
+        return meeting.id
     }
 
     // MARK: - Segments

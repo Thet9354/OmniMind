@@ -8,5 +8,45 @@
 	<array>
 		<string>audio</string>
 	</array>
+	<!-- Portable meeting bundles (.omnimind): the exported type makes the
+	     file AirDrop/share-sheet friendly; the document type routes tapped
+	     bundles into the app (SwiftUI onOpenURL). -->
+	<key>UTExportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>com.thetpine.omnimind.meeting</string>
+			<key>UTTypeDescription</key>
+			<string>OmniMind Meeting</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>omnimind</string>
+				</array>
+			</dict>
+		</dict>
+	</array>
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>OmniMind Meeting</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>com.thetpine.omnimind.meeting</string>
+			</array>
+			<key>LSHandlerRank</key>
+			<string>Owner</string>
+		</dict>
+	</array>
+	<!-- Copy incoming files out of Documents/Inbox and keep Documents
+	     un-browsable — imports go through the in-app preview flow only. -->
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<false/>
 </dict>
 </plist>

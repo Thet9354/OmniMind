@@ -40,6 +40,7 @@ struct MeetingDetailView: View {
     @State private var hasAudio = false
     @State private var showingPaywall = false
     @State private var exportDocument: ExportDocument?
+    @State private var bundleShare: BundleShareItem?
 
     var body: some View {
         List {
@@ -109,15 +110,26 @@ struct MeetingDetailView: View {
                 }
             }
             ToolbarItem(placement: .topBarTrailing) {
-                Button("Export", systemImage: "square.and.arrow.up") {
-                    if entitlements.hasFullAccess {
-                        prepareExport()
-                    } else {
-                        showingPaywall = true
+                Menu {
+                    Button("Transcript as Markdown", systemImage: "doc.plaintext") {
+                        if entitlements.hasFullAccess {
+                            prepareExport()
+                        } else {
+                            showingPaywall = true
+                        }
                     }
+                    Button("Meeting Bundle", systemImage: "square.and.arrow.up.on.square") {
+                        if entitlements.hasFullAccess {
+                            prepareBundleShare()
+                        } else {
+                            showingPaywall = true
+                        }
+                    }
+                } label: {
+                    Label("Export", systemImage: "square.and.arrow.up")
                 }
                 .disabled(segments.isEmpty)
-                .accessibilityHint("Shares the full transcript as Markdown")
+                .accessibilityHint("Share the transcript as text, or the whole meeting to another OmniMind user")
             }
         }
         .sheet(isPresented: $showingPaywall) {
@@ -125,6 +137,9 @@ struct MeetingDetailView: View {
         }
         .sheet(item: $exportDocument) { document in
             ExportSheet(text: document.text)
+        }
+        .sheet(item: $bundleShare) { item in
+            BundleShareSheet(item: item)
         }
         .task(id: meeting.id) {
             loadFirstPage()
@@ -443,6 +458,29 @@ struct MeetingDetailView: View {
 
     // MARK: - Export
 
+    /// Assembles the portable bundle (transcript + AI outputs + audio when
+    /// playable) into a temp .omnimind file and hands it to the share sheet.
+    private func prepareBundleShare() {
+        let container = modelContext.container
+        let meetingID = meeting.id
+        Task {
+            let store = EmbeddingStore(modelContainer: container)
+            guard let bundle = try? await store.exportBundle(for: meetingID) else { return }
+            let audio = AudioArchive.isPlayable(for: meetingID)
+                ? try? Data(contentsOf: AudioArchive.url(for: meetingID))
+                : nil
+            guard let data = try? MeetingBundleCodec.encode(bundle, audio: audio) else { return }
+            let url = FileManager.default.temporaryDirectory
+                .appendingPathComponent(MeetingBundleCodec.filename(for: bundle.title))
+            guard (try? data.write(to: url, options: .atomic)) != nil else { return }
+            bundleShare = BundleShareItem(
+                url: url,
+                byteCount: data.count,
+                includesAudio: audio != nil
+            )
+        }
+    }
+
     private func prepareExport() {
         // Export intentionally reads the FULL transcript, page by page —
         // a one-shot bounded loop, not a resident data structure.
@@ -472,6 +510,56 @@ struct MeetingDetailView: View {
 private struct ExportDocument: Identifiable {
     let id = UUID()
     let text: String
+}
+
+struct BundleShareItem: Identifiable {
+    let id = UUID()
+    let url: URL
+    let byteCount: Int
+    let includesAudio: Bool
+}
+
+/// Hand-off sheet for a prepared .omnimind file: says what's inside, then
+/// ShareLink does the rest (AirDrop, Messages, Files, …).
+struct BundleShareSheet: View {
+    let item: BundleShareItem
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 16) {
+                Image(systemName: "square.and.arrow.up.on.square")
+                    .font(.system(size: 48))
+                    .foregroundStyle(.tint)
+                Text(item.url.lastPathComponent)
+                    .font(.headline)
+                    .multilineTextAlignment(.center)
+                Text(
+                    item.includesAudio
+                        ? "Transcript, AI outputs, and audio — \(item.byteCount.formatted(.byteCount(style: .file))). Anyone with OmniMind can import it with a tap; it never touches a server."
+                        : "Transcript and AI outputs — \(item.byteCount.formatted(.byteCount(style: .file))). Anyone with OmniMind can import it with a tap; it never touches a server."
+                )
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                ShareLink(item: item.url) {
+                    Label("Share Meeting", systemImage: "square.and.arrow.up")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+            }
+            .padding(24)
+            .navigationTitle("Meeting Bundle")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
+            .presentationDetents([.medium])
+        }
+    }
 }
 
 /// Minimal share wrapper so ShareLink gets a fully rendered document.

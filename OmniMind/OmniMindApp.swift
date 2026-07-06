@@ -17,6 +17,9 @@ struct OmniMindApp: App {
     /// Owns the lifetime Transaction.updates listener — started before the
     /// first frame so no out-of-app purchase event can slip past launch.
     @State private var entitlements = EntitlementStore()
+    /// An incoming .omnimind bundle, decoded and awaiting user confirmation.
+    @State private var pendingImport: PendingMeetingImport?
+    @State private var showingImportError = false
 
     init() {
         do {
@@ -38,9 +41,46 @@ struct OmniMindApp: App {
                     entitlements.start()
                     await entitlements.loadProducts()
                 }
+                .onOpenURL { url in
+                    handleIncomingFile(url)
+                }
+                .sheet(item: $pendingImport) { pending in
+                    MeetingImportView(pending: pending)
+                }
+                .alert("Couldn't Open File", isPresented: $showingImportError) {
+                    Button("OK", role: .cancel) {}
+                } message: {
+                    Text("This file isn't a readable OmniMind meeting bundle.")
+                }
         }
         .modelContainer(container)
         .environment(entitlements)
+    }
+
+    /// AirDrop / Files hand-off entry point. Decode-and-preview only —
+    /// nothing touches the library until the user confirms in the sheet.
+    private func handleIncomingFile(_ url: URL) {
+        guard url.pathExtension.lowercased() == MeetingBundleCodec.fileExtension else {
+            return
+        }
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer {
+            if scoped { url.stopAccessingSecurityScopedResource() }
+        }
+        guard let data = try? Data(contentsOf: url),
+              let decoded = try? MeetingBundleCodec.decode(data)
+        else {
+            showingImportError = true
+            return
+        }
+        // Files delivered by-copy land in Documents/Inbox and are ours to
+        // clean up; leave anything outside the sandbox alone.
+        if url.path.contains("/Inbox/") {
+            try? FileManager.default.removeItem(at: url)
+        }
+        pendingImport = PendingMeetingImport(
+            bundle: decoded.bundle, audio: decoded.audio
+        )
     }
 
     private static var isHostingTests: Bool {

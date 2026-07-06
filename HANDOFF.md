@@ -28,7 +28,7 @@ A **local-first, on-device meeting intelligence app** for iOS 26. Live transcrip
 
 ## Verification baseline (current)
 
-- **80 tests / 19 suites green** on the iOS 26.1 simulator (5 hardware-gated tests skip there, run on device).
+- **87 tests / 20 suites green** on the iOS 26.1 simulator (5 hardware-gated tests skip there, run on device).
 - **Release configuration builds clean** (`-configuration Release -destination 'generic/platform=iOS Simulator' build`).
 
 ## Architecture (subsystems, each behind a Swift 6 isolation boundary)
@@ -40,7 +40,7 @@ Cross-boundary traffic is always `Sendable` DTOs — never live `@Model` objects
 - **Memory** (`OmniMind/Memory/`): `EmbeddingStore` (`@ModelActor`, the single persistence funnel — DTOs only across the boundary; also persists AI outputs via `SynthesisArtifacts`). `Embedder` (`NLContextualEmbedding`, mean-pool + L2-normalize). `VectorMath` (vDSP cosine + `TopKHeap`). `SchemaV1` + `SchemaV2` (models nested inside the versioned enums; `Meeting`/`Segment` typealias the CURRENT version; V2 added persisted AI outputs on Meeting) + `OmniMindMigrationPlan` (add a stage for any schema change). `SegmentPager` (windowed fetches). `SearchHit`/`EmbeddedSegment` DTOs.
 - **Synthesis** (`OmniMind/Synthesis/`): `MeetingSynthesizer` actor (summaries, grounded Q&A, transcript cleanup, auto-titles, `@Generable` action items — every failure path falls back to extractive/nil). `ContextAssembler` (token-budgeted grounding). `ExtractiveSummarizer` (centroid fallback). `ChatEngine` (multi-turn RAG, per-turn retrieval).
 - **Store** (`OmniMind/Store/`): `EntitlementStore` (`@MainActor`, verified-only entitlements, lifetime `Transaction.updates` listener) + `ProductCatalog`. **Dormant during pilot** — see below.
-- **Export** (`OmniMind/Export/`): `TranscriptExporter` (Markdown), `RemindersExporter` (EventKit, access on demand).
+- **Export** (`OmniMind/Export/`): `TranscriptExporter` (Markdown), `RemindersExporter` (EventKit, access on demand), `MeetingBundle`/`MeetingBundleCodec` (portable `.omnimind` single-file format: magic `OMNIMTG1` + length-prefixed JSON + raw AAC; vectors excluded by design — receivers re-embed via backfill; UTType `com.thetpine.omnimind.meeting` declared in `Config/Info.plist`; import lands via `onOpenURL` in `OmniMindApp` → `MeetingImportView` confirmation; IDs preserved end-to-end, duplicate imports refused by identity).
 - **UI** (`OmniMind/UI/`): `ContentView` (list + toolbar), `RecordingView`/`RecordingViewModel`, `MeetingDetailView`, `SearchView`, `ChatView`, `PaywallView`, `OnboardingView`, `TailBuffer` (bounded live memory).
 
 ## Enforced invariants (do not break)
@@ -65,7 +65,7 @@ The app is **free for all features during the pilot**. Implemented via `ProductC
 
 ## Phase history (all on `main`, all pushed)
 
-Phase 0 foundation → 1 capture graph → 2 transcription → 3 persistence → 4 embeddings/RAG search → 5 StoreKit → 6 synthesis → 7 resilience/polish → 7.5 transcription quality + free pilot → 8 launch hardening → app icon → 9 (Sprint A) latency/feel → 10 (Sprint B) background recording/auto-titles/action items → 11 (Tier 2) chat/audio replay/turn markers/onboarding → 12 night-review fixes round 1 (route-change crash, playable-archive honesty, SchemaV2 persisted AI outputs, tappable action items, Reminders-denial Settings link, export formatting).
+Phase 0 foundation → 1 capture graph → 2 transcription → 3 persistence → 4 embeddings/RAG search → 5 StoreKit → 6 synthesis → 7 resilience/polish → 7.5 transcription quality + free pilot → 8 launch hardening → app icon → 9 (Sprint A) latency/feel → 10 (Sprint B) background recording/auto-titles/action items → 11 (Tier 2) chat/audio replay/turn markers/onboarding → 12 night-review fixes round 1 (route-change crash, playable-archive honesty, SchemaV2 persisted AI outputs, tappable action items, Reminders-denial Settings link, export formatting) → 13 portable meeting bundles (serverless user-to-user sharing via `.omnimind` files over AirDrop/share sheet).
 
 ## What's next (nothing in progress; awaiting user direction)
 
