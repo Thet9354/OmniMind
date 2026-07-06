@@ -48,5 +48,9 @@
 	     un-browsable — imports go through the in-app preview flow only. -->
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<false/>
+	<!-- Group invitations arrive as CloudKit share links; this key lets
+	     the system route accepted invites into the app. -->
+	<key>CKSharingSupported</key>
+	<true/>
 </dict>
 </plist>

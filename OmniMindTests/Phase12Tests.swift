@@ -31,11 +31,15 @@ struct Phase12Tests {
         defer { try? FileManager.default.removeItem(at: url) }
 
         // Seed a V1-only store, exactly as the shipped app wrote it.
+        // (cloudKitDatabase: .none matches the factory — with the CloudKit
+        // entitlement present, .automatic would reject this schema.)
         do {
             let schema = Schema(versionedSchema: SchemaV1.self)
             let v1 = try ModelContainer(
                 for: schema,
-                configurations: [ModelConfiguration(schema: schema, url: url)]
+                configurations: [ModelConfiguration(
+                    schema: schema, url: url, cloudKitDatabase: .none
+                )]
             )
             let context = ModelContext(v1)
             let meeting = SchemaV1.Meeting(title: "Pre-migration")
@@ -53,7 +57,9 @@ struct Phase12Tests {
         let v2 = try ModelContainer(
             for: schema,
             migrationPlan: OmniMindMigrationPlan.self,
-            configurations: [ModelConfiguration(schema: schema, url: url)]
+            configurations: [ModelConfiguration(
+                schema: schema, url: url, cloudKitDatabase: .none
+            )]
         )
         let context = ModelContext(v2)
         let meetings = try context.fetch(FetchDescriptor<Meeting>())

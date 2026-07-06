@@ -41,6 +41,22 @@ No audio or text ever leaves the device; the app has no server.
 No account, no login, no network dependency after the one-time on-device
 model downloads (managed by the OS).
 
+## Groups (iCloud/CloudKit)
+
+Users can optionally create "groups" (a team, class, or project) and
+publish individual meetings to them. A group is a CloudKit record zone
+in the group owner's personal iCloud, shared via the system
+collaboration sheet (zone-wide CKShare). Key facts:
+
+- Publishing is always an explicit per-meeting user action — nothing
+  syncs automatically, and recording/transcription remain fully
+  on-device.
+- The developer operates no server and cannot access group content;
+  data lives only in the members' iCloud accounts (private/shared
+  CloudKit database).
+- Without an iCloud account the feature shows a sign-in prompt and the
+  rest of the app is unaffected.
+
 ## In-app purchases
 
 A StoreKit 2 subscription subsystem exists in the binary but is dormant:

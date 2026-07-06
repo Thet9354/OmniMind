@@ -17,6 +17,17 @@ Select **"Data Not Collected."** That is the truthful answer for the whole
 app: no analytics, no identifiers, no server. The bundled
 `PrivacyInfo.xcprivacy` already matches this declaration.
 
+## 2.5 iCloud capability (one-time, required since Groups / Phase 14)
+
+Xcode → OmniMind target → Signing & Capabilities → **+ Capability →
+iCloud** → check **CloudKit** → container
+`iCloud.com.thetpine.workspace.OmniMind` (the entitlements file already
+references it; adding the capability registers the container on the
+team). Without this, device builds fail signing and Groups can't reach
+CloudKit. The CloudKit **schema** deploys just-in-time in Development;
+before external TestFlight, open the CloudKit Console and **deploy the
+schema to Production** (Development → Deploy Schema Changes).
+
 ## 3. Upload a build
 
 1. Xcode: bump build number if re-uploading (target → General → Build).

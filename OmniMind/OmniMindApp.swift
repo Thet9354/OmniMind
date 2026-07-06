@@ -5,11 +5,36 @@
 //  Created by Phoon Thet Pine on 4/7/26.
 //
 
+import CloudKit
 import SwiftUI
 import SwiftData
 
+/// Exists solely to receive CloudKit share (group invite) acceptances —
+/// the one hand-off SwiftUI's lifecycle has no modifier for.
+final class OmniMindAppDelegate: NSObject, UIApplicationDelegate {
+    func application(
+        _ application: UIApplication,
+        userDidAcceptCloudKitShareWith cloudKitShareMetadata: CKShare.Metadata
+    ) {
+        Task {
+            try? await GroupSyncStore().acceptShare(from: cloudKitShareMetadata)
+            NotificationCenter.default.post(name: .omniMindGroupInviteAccepted, object: nil)
+        }
+    }
+}
+
+extension Notification.Name {
+    /// Posted after a group invite is accepted, so an open Groups screen
+    /// can refresh and show the new membership.
+    static let omniMindGroupInviteAccepted = Notification.Name(
+        "OmniMind.groupInviteAccepted"
+    )
+}
+
 @main
 struct OmniMindApp: App {
+    @UIApplicationDelegateAdaptor(OmniMindAppDelegate.self)
+    private var appDelegate
     /// Built once at launch. A failure here means the persistent store is
     /// unusable, which is unrecoverable for a local-first app — crash early
     /// and loudly rather than limp along with silent data loss.

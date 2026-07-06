@@ -75,6 +75,8 @@ Environment-gated tests (speech/embedding/LLM assets) skip truthfully where the 
 
 No tracking, no analytics, no server. The privacy manifest declares zero collected data types. Speech recognition, embedding generation, and language-model inference are all Apple on-device frameworks. Feedback is a plain prefilled email.
 
+Sharing is opt-in and serverless: meeting bundles travel as files the user explicitly shares (AirDrop/share sheet), and group libraries live in the group owner's personal iCloud via CloudKit — storage the developer cannot read. Nothing leaves the device unless the user publishes it.
+
 ## Stack
 
 Swift 6 (strict concurrency) · SwiftUI · SwiftData (versioned schema + migration plan) · AVAudioEngine · Speech (`SpeechAnalyzer`) · NaturalLanguage (`NLContextualEmbedding`) · Accelerate (vDSP) · FoundationModels · StoreKit 2 · Swift Testing

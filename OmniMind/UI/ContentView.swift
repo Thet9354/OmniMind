@@ -20,6 +20,7 @@ struct ContentView: View {
     @State private var showingRecorder = false
     @State private var showingSearch = false
     @State private var showingChat = false
+    @State private var showingGroups = false
     @State private var showingPaywall = false
     @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = false
 
@@ -68,6 +69,12 @@ struct ContentView: View {
                     .accessibilityHint("Chat with your meeting history")
                 }
                 ToolbarItem(placement: .topBarLeading) {
+                    Button("Groups", systemImage: "person.3") {
+                        showingGroups = true
+                    }
+                    .accessibilityHint("Shared meeting libraries for teams, classes, and projects")
+                }
+                ToolbarItem(placement: .topBarLeading) {
                     Button("Send Feedback", systemImage: "envelope") {
                         if let url = Self.feedbackURL() {
                             openURL(url)
@@ -92,6 +99,9 @@ struct ContentView: View {
             }
             .sheet(isPresented: $showingChat) {
                 ChatView()
+            }
+            .sheet(isPresented: $showingGroups) {
+                GroupsView()
             }
             .fullScreenCover(isPresented: Binding(
                 get: { !hasSeenOnboarding },
