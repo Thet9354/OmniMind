@@ -62,6 +62,9 @@ final class RecordingViewModel {
     /// model spin-up. Consumed per session (analyzers are single-use).
     private var prewarmedTranscription: TranscriptionActor?
     private var prewarmedLocale: String?
+    /// Dynamic Island / Lock Screen presence while recording. Best-effort
+    /// by contract — a Live Activity failure never touches capture.
+    private let liveActivity = RecordingLiveActivityController()
 
     var isRecording: Bool { status == .recording || status == .preparing }
 
@@ -126,6 +129,7 @@ final class RecordingViewModel {
             capture = nil
             audioLevel = 0
             recordingStartedAt = nil
+            liveActivity.end()
             UIApplication.shared.isIdleTimerDisabled = false
             // Warm up for the NEXT session while the user reviews this one.
             Task { await self.prewarmTranscription() }
@@ -165,6 +169,7 @@ final class RecordingViewModel {
             recordingStartedAt = .now
             UIApplication.shared.isIdleTimerDisabled = true
             startHealthPolling(for: capture)
+            liveActivity.start(startedAt: recordingStartedAt ?? .now)
 
             let archiveURL = keepAudioEnabled ? AudioArchive.url(for: sessionID) : nil
             for try await update in await transcription.transcribe(
@@ -184,6 +189,7 @@ final class RecordingViewModel {
                         await persistFinal(chunk)
                     }
                     pendingChunkText = coalescer.pendingText
+                    pushLiveActivityUpdate()
                 }
             }
             if let remainder = coalescer.flush() {
@@ -213,9 +219,24 @@ final class RecordingViewModel {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(2))
                 guard let self, !Task.isCancelled else { return }
+                let wasDegraded = self.isDegraded
                 self.droppedBuffers = await capture.droppedBufferCount
+                if self.isDegraded != wasDegraded {
+                    self.pushLiveActivityUpdate()   // island mirrors the banner
+                }
             }
         }
+    }
+
+    /// Segment-count/degraded refresh for the Live Activity — called on
+    /// coalesced-chunk cadence (a few times a minute), never per volatile.
+    private func pushLiveActivityUpdate() {
+        guard let startedAt = recordingStartedAt else { return }
+        liveActivity.update(
+            startedAt: startedAt,
+            segmentCount: liveTail.totalAppended,
+            isDegraded: isDegraded
+        )
     }
 
     /// Lazily creates the meeting on the FIRST final — abandoned sessions

@@ -6,6 +6,12 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		D385E9682FFBCA3100B5B481 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D385E9672FFBCA3100B5B481 /* WidgetKit.framework */; };
+		D385E96A2FFBCA3100B5B481 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D385E9692FFBCA3100B5B481 /* SwiftUI.framework */; };
+		D385E9772FFBCA3300B5B481 /* OmniMindWidgetsExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = D385E9652FFBCA3100B5B481 /* OmniMindWidgetsExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		D385E3892FF962A700B5B481 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -21,13 +27,57 @@
 			remoteGlobalIDString = D385E37A2FF962A600B5B481;
 			remoteInfo = OmniMind;
 		};
+		D385E9752FFBCA3300B5B481 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = D385E3732FF962A600B5B481 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D385E9642FFBCA3100B5B481;
+			remoteInfo = OmniMindWidgetsExtension;
+		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		D385E9782FFBCA3300B5B481 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				D385E9772FFBCA3300B5B481 /* OmniMindWidgetsExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		D385E37B2FF962A600B5B481 /* OmniMind.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = OmniMind.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		D385E3882FF962A700B5B481 /* OmniMindTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OmniMindTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		D385E3922FF962A700B5B481 /* OmniMindUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OmniMindUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		D385E9652FFBCA3100B5B481 /* OmniMindWidgetsExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = OmniMindWidgetsExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		D385E9672FFBCA3100B5B481 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		D385E9692FFBCA3100B5B481 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		D385E97B2FFBCA3300B5B481 /* Exceptions for "OmniMindWidgets" folder in "OmniMindWidgetsExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = D385E9642FFBCA3100B5B481 /* OmniMindWidgetsExtension */;
+		};
+		D385E9AA2FFBCA3300B5B481 /* Exceptions for "OmniMindWidgets" folder in "OmniMind" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Assets.xcassets,
+				Info.plist,
+				OmniMindWidgetsBundle.swift,
+				OmniMindWidgetsLiveActivity.swift,
+			);
+			target = D385E37A2FF962A600B5B481 /* OmniMind */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		D385E37D2FF962A600B5B481 /* OmniMind */ = {
@@ -43,6 +93,15 @@
 		D385E3952FF962A700B5B481 /* OmniMindUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = OmniMindUITests;
+			sourceTree = "<group>";
+		};
+		D385E96B2FFBCA3100B5B481 /* OmniMindWidgets */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				D385E9AA2FFBCA3300B5B481 /* Exceptions for "OmniMindWidgets" folder in "OmniMind" target */,
+				D385E97B2FFBCA3300B5B481 /* Exceptions for "OmniMindWidgets" folder in "OmniMindWidgetsExtension" target */,
+			);
+			path = OmniMindWidgets;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -69,6 +128,15 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		D385E9622FFBCA3100B5B481 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D385E96A2FFBCA3100B5B481 /* SwiftUI.framework in Frameworks */,
+				D385E9682FFBCA3100B5B481 /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -78,6 +146,8 @@
 				D385E37D2FF962A600B5B481 /* OmniMind */,
 				D385E38B2FF962A700B5B481 /* OmniMindTests */,
 				D385E3952FF962A700B5B481 /* OmniMindUITests */,
+				D385E96B2FFBCA3100B5B481 /* OmniMindWidgets */,
+				D385E9662FFBCA3100B5B481 /* Frameworks */,
 				D385E37C2FF962A600B5B481 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -88,8 +158,18 @@
 				D385E37B2FF962A600B5B481 /* OmniMind.app */,
 				D385E3882FF962A700B5B481 /* OmniMindTests.xctest */,
 				D385E3922FF962A700B5B481 /* OmniMindUITests.xctest */,
+				D385E9652FFBCA3100B5B481 /* OmniMindWidgetsExtension.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		D385E9662FFBCA3100B5B481 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				D385E9672FFBCA3100B5B481 /* WidgetKit.framework */,
+				D385E9692FFBCA3100B5B481 /* SwiftUI.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -102,13 +182,16 @@
 				D385E3772FF962A600B5B481 /* Sources */,
 				D385E3782FF962A600B5B481 /* Frameworks */,
 				D385E3792FF962A600B5B481 /* Resources */,
+				D385E9782FFBCA3300B5B481 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				D385E9762FFBCA3300B5B481 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				D385E37D2FF962A600B5B481 /* OmniMind */,
+				D385E96B2FFBCA3100B5B481 /* OmniMindWidgets */,
 			);
 			name = OmniMind;
 			packageProductDependencies = (
@@ -163,6 +246,28 @@
 			productReference = D385E3922FF962A700B5B481 /* OmniMindUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		D385E9642FFBCA3100B5B481 /* OmniMindWidgetsExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D385E97C2FFBCA3300B5B481 /* Build configuration list for PBXNativeTarget "OmniMindWidgetsExtension" */;
+			buildPhases = (
+				D385E9612FFBCA3100B5B481 /* Sources */,
+				D385E9622FFBCA3100B5B481 /* Frameworks */,
+				D385E9632FFBCA3100B5B481 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				D385E96B2FFBCA3100B5B481 /* OmniMindWidgets */,
+			);
+			name = OmniMindWidgetsExtension;
+			packageProductDependencies = (
+			);
+			productName = OmniMindWidgetsExtension;
+			productReference = D385E9652FFBCA3100B5B481 /* OmniMindWidgetsExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -184,6 +289,9 @@
 						CreatedOnToolsVersion = 26.6;
 						TestTargetID = D385E37A2FF962A600B5B481;
 					};
+					D385E9642FFBCA3100B5B481 = {
+						CreatedOnToolsVersion = 26.6;
+					};
 				};
 			};
 			buildConfigurationList = D385E3762FF962A600B5B481 /* Build configuration list for PBXProject "OmniMind" */;
@@ -203,6 +311,7 @@
 				D385E37A2FF962A600B5B481 /* OmniMind */,
 				D385E3872FF962A700B5B481 /* OmniMindTests */,
 				D385E3912FF962A700B5B481 /* OmniMindUITests */,
+				D385E9642FFBCA3100B5B481 /* OmniMindWidgetsExtension */,
 			);
 		};
 /* End PBXProject section */
@@ -223,6 +332,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		D385E3902FF962A700B5B481 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D385E9632FFBCA3100B5B481 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -253,6 +369,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		D385E9612FFBCA3100B5B481 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -265,6 +388,11 @@
 			isa = PBXTargetDependency;
 			target = D385E37A2FF962A600B5B481 /* OmniMind */;
 			targetProxy = D385E3932FF962A700B5B481 /* PBXContainerItemProxy */;
+		};
+		D385E9762FFBCA3300B5B481 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D385E9642FFBCA3100B5B481 /* OmniMindWidgetsExtension */;
+			targetProxy = D385E9752FFBCA3300B5B481 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -548,6 +676,68 @@
 			};
 			name = Release;
 		};
+		D385E9792FFBCA3300B5B481 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = K8FKWBYV9S;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = OmniMindWidgets/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = OmniMindWidgets;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.thetpine.workspace.OmniMind.OmniMindWidgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		D385E97A2FFBCA3300B5B481 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = K8FKWBYV9S;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = OmniMindWidgets/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = OmniMindWidgets;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.thetpine.workspace.OmniMind.OmniMindWidgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -583,6 +773,15 @@
 			buildConfigurations = (
 				D385E3A32FF962A700B5B481 /* Debug */,
 				D385E3A42FF962A700B5B481 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		D385E97C2FFBCA3300B5B481 /* Build configuration list for PBXNativeTarget "OmniMindWidgetsExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D385E9792FFBCA3300B5B481 /* Debug */,
+				D385E97A2FFBCA3300B5B481 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

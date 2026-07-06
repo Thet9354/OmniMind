@@ -52,5 +52,8 @@
 	     the system route accepted invites into the app. -->
 	<key>CKSharingSupported</key>
 	<true/>
+	<!-- Live Activity / Dynamic Island while recording (Phase 15). -->
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 </dict>
 </plist>
