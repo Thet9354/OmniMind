@@ -21,11 +21,12 @@ A **local-first, on-device meeting intelligence app** for iOS 26. Live transcrip
 3. **FoundationModels / NLContextualEmbedding / SpeechTranscriber assets are unavailable in the simulator** — the tests that need them auto-SKIP there and must be verified on a physical device. `SystemLanguageModel.default.availability` reads `.available` on simulators even when inference is sandbox-denied, so FM tests gate on a real probe `respond()` call.
 4. **`UIBackgroundModes` is NOT a valid `INFOPLIST_KEY_` build setting.** It lives in `Config/Info.plist` (a partial plist merged with the generated one via `INFOPLIST_FILE = Config/Info.plist` while `GENERATE_INFOPLIST_FILE` stays YES).
 5. **`AVAudioFile` finalizes its header on deallocation** — release an `AudioArchiveWriter` before reading the file back.
+   - **And its processing format must match every buffer passed to `write(from:)`** — a mismatch is a CoreAudio assert that ABORTS the process (not a thrown error). The settings-only `AVAudioFile(forWriting:settings:)` initializer defaults to Float32 deinterleaved, but on hardware `SpeechAnalyzer.bestAvailableAudioFormat` is Int16 — this crashed the first on-device Record tap (fixed by pinning `commonFormat:`/`interleaved:` to the incoming stream; simulator tests can't catch it unless they write Int16 buffers, which the regression test now does).
 6. Files under `OmniMind/` auto-join the app target (`PBXFileSystemSynchronizedRootGroup`) — no pbxproj surgery to add a source file. The same is true for `OmniMindTests/`.
 
 ## Verification baseline (current)
 
-- **73 tests / 18 suites green** on the iOS 26.1 simulator (5 hardware-gated tests skip there, run on device).
+- **74 tests / 18 suites green** on the iOS 26.1 simulator (5 hardware-gated tests skip there, run on device).
 - **Release configuration builds clean** (`-configuration Release -destination 'generic/platform=iOS Simulator' build`).
 
 ## Architecture (subsystems, each behind a Swift 6 isolation boundary)

@@ -46,10 +46,21 @@ nonisolated final class AudioArchiveWriter {
         let settings: [String: Any] = [
             AVFormatIDKey: kAudioFormatMPEG4AAC,
             AVSampleRateKey: format.sampleRate,
-            AVNumberOfChannelsKey: 1,
+            AVNumberOfChannelsKey: format.channelCount,
             AVEncoderBitRateKey: 32_000,
         ]
-        file = try AVAudioFile(forWriting: url, settings: settings)
+        // The file's processing format MUST match the buffers handed to
+        // write(from:): a mismatch is a CoreAudio assert — a process abort,
+        // not a thrown error. The settings-only initializer defaults to
+        // Float32 deinterleaved, but on hardware the analyzer's preferred
+        // format is Int16, so the processing format is pinned to the
+        // incoming stream's layout instead.
+        file = try AVAudioFile(
+            forWriting: url,
+            settings: settings,
+            commonFormat: format.commonFormat,
+            interleaved: format.isInterleaved
+        )
     }
 
     func write(_ buffer: AVAudioPCMBuffer) throws {

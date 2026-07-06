@@ -64,6 +64,41 @@ struct AudioArchiveTests {
         #expect(!AudioArchive.exists(for: id))
     }
 
+    @Test("Writer accepts the analyzer's Int16 format (on-device abort regression)")
+    func writeInt16AnalyzerFormat() throws {
+        let id = UUID()
+        let url = AudioArchive.url(for: id)
+        defer { AudioArchive.delete(for: id) }
+
+        // On hardware SpeechAnalyzer's preferred format is Int16 interleaved,
+        // not the Float32 the settings-only AVAudioFile initializer assumes.
+        // A processing-format mismatch aborts the process inside CoreAudio
+        // (first on-device Record tap, 2026-07-06), so this guards format
+        // agreement itself, not just the encoded output.
+        let format = try #require(AVAudioFormat(
+            commonFormat: .pcmFormatInt16,
+            sampleRate: 16_000, channels: 1, interleaved: true
+        ))
+        var writer: AudioArchiveWriter? = try AudioArchiveWriter(url: url, format: format)
+
+        for _ in 0..<10 {
+            let buffer = try #require(
+                AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 1_600)
+            )
+            buffer.frameLength = 1_600
+            let data = try #require(buffer.int16ChannelData)
+            for frame in 0..<1_600 {
+                data[0][frame] = Int16(sinf(2 * .pi * 440 * Float(frame) / 16_000) * 12_000)
+            }
+            try writer?.write(buffer)
+        }
+        writer = nil
+
+        #expect(AudioArchive.exists(for: id))
+        let readBack = try AVAudioFile(forReading: url)
+        #expect(abs(Double(readBack.length) - 16_000) < 2_048)
+    }
+
     @Test("createMeeting honors a caller-supplied id (audio shares identity)")
     func explicitMeetingID() async throws {
         let container = try ModelContainerFactory.make(inMemory: true)
