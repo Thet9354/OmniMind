@@ -11,7 +11,7 @@ nonisolated enum ModelContainerFactory {
     /// Builds the app-wide container. Pass `inMemory: true` from tests and
     /// SwiftUI previews so they never touch the on-disk store.
     static func make(inMemory: Bool = false) throws -> ModelContainer {
-        let schema = Schema(versionedSchema: SchemaV1.self)
+        let schema = Schema(versionedSchema: SchemaV2.self)
         let configuration = ModelConfiguration(
             schema: schema,
             isStoredInMemoryOnly: inMemory

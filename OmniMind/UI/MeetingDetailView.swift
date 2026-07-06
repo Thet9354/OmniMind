@@ -10,6 +10,7 @@
 import AVFAudio
 import SwiftData
 import SwiftUI
+import UIKit
 
 struct MeetingDetailView: View {
     let meeting: Meeting
@@ -28,8 +29,15 @@ struct MeetingDetailView: View {
     @State private var extractingActions = false
     @State private var actionsUnavailable = false
     @State private var remindersStatus: String?
+    /// iOS only ever shows the Reminders permission prompt once; after a
+    /// denial the recovery path is the Settings app, so the UI offers it.
+    @State private var remindersDenied = false
+    @Environment(\.openURL) private var openURL
     @State private var player: AVAudioPlayer?
     @State private var isPlaying = false
+    /// Readable-audio check, done once per meeting: a crash-stranded
+    /// archive exists on disk but can't open, and must show no play UI.
+    @State private var hasAudio = false
     @State private var showingPaywall = false
     @State private var exportDocument: ExportDocument?
 
@@ -138,10 +146,6 @@ struct MeetingDetailView: View {
 
     // MARK: - Playback
 
-    private var hasAudio: Bool {
-        AudioArchive.exists(for: meeting.id)
-    }
-
     private func ensurePlayer() -> AVAudioPlayer? {
         if let player { return player }
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
@@ -179,7 +183,29 @@ struct MeetingDetailView: View {
             in: modelContext, meetingID: meeting.id, offset: 0
         )) ?? []
         hasMore = segments.count == SegmentPager.pageSize
+        hasAudio = AudioArchive.isPlayable(for: meeting.id)
+        loadPersistedArtifacts()
         loaded = true
+    }
+
+    /// AI outputs persist on the meeting row (SchemaV2) — reopening a
+    /// meeting shows what was generated before; regenerating is always an
+    /// explicit tap, never a side effect of navigation.
+    private func loadPersistedArtifacts() {
+        summary = meeting.summaryText.map {
+            MeetingSynthesizer.Output(
+                text: $0,
+                method: MeetingSynthesizer.Method(
+                    rawValue: meeting.summaryMethod ?? ""
+                ) ?? .foundationModel
+            )
+        }
+        cleaned = meeting.cleanedTranscript.map {
+            MeetingSynthesizer.Output(text: $0, method: .foundationModel)
+        }
+        actionItems = meeting.actionItemsData.flatMap {
+            try? JSONDecoder().decode([ExtractedActionItem].self, from: $0)
+        }
     }
 
     private func loadNextPage() {
@@ -194,7 +220,9 @@ struct MeetingDetailView: View {
 
     private var summarySection: some View {
         Section("Summary") {
-            if let summary {
+            if summarizing {
+                ProgressView("Summarizing on-device…")
+            } else if let summary {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(summary.text)
                     Text(summary.method.rawValue)
@@ -203,8 +231,10 @@ struct MeetingDetailView: View {
                 }
                 .padding(.vertical, 2)
                 .accessibilityElement(children: .combine)
-            } else if summarizing {
-                ProgressView("Summarizing on-device…")
+                Button("Regenerate", systemImage: "arrow.clockwise") {
+                    generateSummary()
+                }
+                .font(.footnote)
             } else {
                 Button("Generate Summary", systemImage: "sparkles") {
                     if entitlements.hasFullAccess {
@@ -222,37 +252,40 @@ struct MeetingDetailView: View {
     @ViewBuilder
     private var actionItemsSection: some View {
         Section("Action Items") {
-            if let actionItems {
+            if extractingActions {
+                ProgressView("Finding action items on-device…")
+            } else if let actionItems {
                 if actionItems.isEmpty {
                     Text("No commitments were made in this meeting.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(actionItems) { item in
-                        VStack(alignment: .leading, spacing: 2) {
-                            Label(item.task, systemImage: "circle")
-                            if item.owner != nil || item.due != nil {
-                                Text([item.owner, item.due]
-                                    .compactMap(\.self)
-                                    .joined(separator: " · "))
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .padding(.leading, 28)
-                            }
-                        }
-                        .accessibilityElement(children: .combine)
+                        actionItemRow(item)
                     }
                     Button("Add All to Reminders", systemImage: "checklist") {
                         exportToReminders(actionItems)
                     }
-                    if let remindersStatus {
+                    if remindersDenied {
+                        Button(
+                            "Allow Reminders access in Settings",
+                            systemImage: "gear"
+                        ) {
+                            if let url = URL(string: UIApplication.openSettingsURLString) {
+                                openURL(url)
+                            }
+                        }
+                        .font(.footnote)
+                    } else if let remindersStatus {
                         Text(remindersStatus)
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
                 }
-            } else if extractingActions {
-                ProgressView("Finding action items on-device…")
+                Button("Regenerate", systemImage: "arrow.clockwise") {
+                    extractActionItems()
+                }
+                .font(.footnote)
             } else if actionsUnavailable {
                 Text("Action-item extraction needs Apple Intelligence on this device.")
                     .font(.footnote)
@@ -262,6 +295,51 @@ struct MeetingDetailView: View {
                     extractActionItems()
                 }
             }
+        }
+    }
+
+    /// One tappable action item: the whole row toggles its check-off state,
+    /// which persists with the items themselves.
+    private func actionItemRow(_ item: ExtractedActionItem) -> some View {
+        Button {
+            toggleDone(item)
+        } label: {
+            VStack(alignment: .leading, spacing: 2) {
+                Label {
+                    Text(item.task)
+                        .strikethrough(item.done)
+                        .foregroundStyle(item.done ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
+                } icon: {
+                    Image(systemName: item.done ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(item.done ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                }
+                if item.owner != nil || item.due != nil {
+                    Text([item.owner, item.due]
+                        .compactMap(\.self)
+                        .joined(separator: " · "))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.leading, 28)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(item.done ? [.isSelected] : [])
+        .accessibilityHint(item.done ? "Marks the task as not done" : "Marks the task as done")
+    }
+
+    private func toggleDone(_ item: ExtractedActionItem) {
+        guard var items = actionItems,
+              let index = items.firstIndex(where: { $0.id == item.id })
+        else { return }
+        items[index].done.toggle()
+        actionItems = items
+        let container = modelContext.container
+        let meetingID = meeting.id
+        Task {
+            let store = EmbeddingStore(modelContainer: container)
+            try? await store.saveActionItems(items, for: meetingID)
         }
     }
 
@@ -276,6 +354,9 @@ struct MeetingDetailView: View {
             actionItems = items
             actionsUnavailable = items == nil
             extractingActions = false
+            if let items {
+                try? await store.saveActionItems(items, for: meetingID)
+            }
         }
     }
 
@@ -284,9 +365,11 @@ struct MeetingDetailView: View {
         Task {
             do {
                 let count = try await RemindersExporter.export(items, sourceTitle: title)
+                remindersDenied = false
                 remindersStatus = "Added \(count) reminder\(count == 1 ? "" : "s")."
             } catch {
-                remindersStatus = "Reminders access is needed — enable it in Settings › Privacy."
+                remindersDenied = true
+                remindersStatus = nil
             }
         }
     }
@@ -296,7 +379,9 @@ struct MeetingDetailView: View {
     @ViewBuilder
     private var cleanupSection: some View {
         Section("Cleaned Transcript") {
-            if let cleaned {
+            if cleaning {
+                ProgressView("Repairing transcript on-device…")
+            } else if let cleaned {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(cleaned.text)
                     Text("Repaired on-device — original segments below are untouched.")
@@ -305,8 +390,10 @@ struct MeetingDetailView: View {
                 }
                 .padding(.vertical, 2)
                 .accessibilityElement(children: .combine)
-            } else if cleaning {
-                ProgressView("Repairing transcript on-device…")
+                Button("Regenerate", systemImage: "arrow.clockwise") {
+                    cleanTranscript()
+                }
+                .font(.footnote)
             } else if cleanupUnavailable {
                 Text("Transcript cleanup needs Apple Intelligence on this device.")
                     .font(.footnote)
@@ -330,6 +417,9 @@ struct MeetingDetailView: View {
             cleaned = output
             cleanupUnavailable = output == nil
             cleaning = false
+            if let output {
+                try? await store.saveCleanedTranscript(output.text, for: meetingID)
+            }
         }
     }
 
@@ -343,6 +433,11 @@ struct MeetingDetailView: View {
             let output = await MeetingSynthesizer().summarize(embedded)
             summary = output.text.isEmpty ? nil : output
             summarizing = false
+            if let output = summary {
+                try? await store.saveSummary(
+                    output.text, method: output.method.rawValue, for: meetingID
+                )
+            }
         }
     }
 

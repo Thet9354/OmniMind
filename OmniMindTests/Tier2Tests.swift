@@ -55,6 +55,7 @@ struct AudioArchiveTests {
         writer = nil
 
         #expect(AudioArchive.exists(for: id))
+        #expect(AudioArchive.isPlayable(for: id))
         let readBack = try AVAudioFile(forReading: url)
         // AAC priming/padding shifts a few hundred frames; a second of
         // audio must survive within codec tolerance.

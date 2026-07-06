@@ -140,6 +140,19 @@ actor AudioStreamActor: AudioCapturing {
             else { return }
             Task { await self.handleRouteChange(reason: reason) }
         })
+
+        // The engine stops itself on I/O configuration changes (sample-rate
+        // or channel-count flips that arrive WITHOUT a route-change reason,
+        // e.g. AirPods renegotiating A2DP → HFP). Without this observer the
+        // session sits silently stopped.
+        observers.append(center.addObserver(
+            forName: .AVAudioEngineConfigurationChange,
+            object: engine,
+            queue: nil
+        ) { [weak self] _ in
+            guard let self else { return }
+            Task { await self.rebuildCaptureGraph() }
+        })
     }
 
     private func removeSessionObservers() {
@@ -183,25 +196,44 @@ actor AudioStreamActor: AudioCapturing {
     private func handleRouteChange(reason: AVAudioSession.RouteChangeReason) {
         switch reason {
         case .oldDeviceUnavailable, .newDeviceAvailable, .categoryChange:
-            guard state == .running, let bridge else { return }
-            // The hardware format may have changed (e.g. AirPods → built-in
-            // mic). Reinstall the tap against the new format; downstream
-            // converters key off each buffer's own format, so they follow.
-            let input = engine.inputNode
-            input.removeTap(onBus: 0)
-            let newFormat = input.outputFormat(forBus: 0)
-            guard newFormat.sampleRate > 0 else {
-                teardown()
-                return
-            }
-            input.installTap(onBus: 0, bufferSize: 2048, format: newFormat) { buffer, _ in
-                bridge.yield(buffer)
-            }
-            if !engine.isRunning {
-                try? engine.start()
-            }
+            rebuildCaptureGraph()
         default:
             break
+        }
+    }
+
+    /// Route/configuration recovery. The hardware format may have changed
+    /// (e.g. AirPods → built-in mic), and installing a tap against a running
+    /// engine whose graph still holds the OLD format raises an uncatchable
+    /// NSException — so the engine is fully stopped and reset() BEFORE the
+    /// format is re-queried and the tap reinstalled. Downstream converters
+    /// key off each buffer's own format, so they follow automatically.
+    /// Any failure ends the stream cleanly (transcript-so-far persists).
+    private func rebuildCaptureGraph() {
+        guard state == .running, let bridge else { return }
+
+        let input = engine.inputNode
+        engine.stop()
+        input.removeTap(onBus: 0)
+        // Drop the stale render graph so the input node re-adopts the new
+        // hardware format; querying before reset can return a format the
+        // engine will refuse a tap for.
+        engine.reset()
+
+        let newFormat = input.outputFormat(forBus: 0)
+        guard newFormat.sampleRate > 0, newFormat.channelCount > 0 else {
+            teardown()
+            return
+        }
+        input.installTap(onBus: 0, bufferSize: 2048, format: newFormat) { buffer, _ in
+            // ── real-time render thread ── one lock-free enqueue (§1.1).
+            bridge.yield(buffer)
+        }
+        engine.prepare()
+        do {
+            try engine.start()
+        } catch {
+            teardown()
         }
     }
 }

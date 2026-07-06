@@ -23,10 +23,12 @@ A **local-first, on-device meeting intelligence app** for iOS 26. Live transcrip
 5. **`AVAudioFile` finalizes its header on deallocation** — release an `AudioArchiveWriter` before reading the file back.
    - **And its processing format must match every buffer passed to `write(from:)`** — a mismatch is a CoreAudio assert that ABORTS the process (not a thrown error). The settings-only `AVAudioFile(forWriting:settings:)` initializer defaults to Float32 deinterleaved, but on hardware `SpeechAnalyzer.bestAvailableAudioFormat` is Int16 — this crashed the first on-device Record tap (fixed by pinning `commonFormat:`/`interleaved:` to the incoming stream; simulator tests can't catch it unless they write Int16 buffers, which the regression test now does).
 6. Files under `OmniMind/` auto-join the app target (`PBXFileSystemSynchronizedRootGroup`) — no pbxproj surgery to add a source file. The same is true for `OmniMindTests/`.
+7. **Never (re)install an AVAudioEngine input tap on a running engine after a route change** — `installTap` raises an uncatchable NSException on a format mismatch (this crashed AirPods-connect mid-recording, 2026-07-06). Recovery order: `engine.stop()` → `removeTap` → `engine.reset()` → re-query `outputFormat(forBus: 0)` → guard sampleRate/channels > 0 → reinstall → `prepare()`/`start()`; any failure ends the stream cleanly. Also observe `.AVAudioEngineConfigurationChange` — the engine silently stops itself on config flips that arrive without a route-change reason.
+8. **Versioned-schema tests: a live older-version container poisons concurrent tests.** While a `Schema(versionedSchema: SchemaV1.self)` container exists in-process, parallel writes to V2-ONLY attributes are silently dropped (same entity name resolves against V1 metadata). Any suite that both runs a migration AND touches newer-version-only fields must be `.serialized`.
 
 ## Verification baseline (current)
 
-- **74 tests / 18 suites green** on the iOS 26.1 simulator (5 hardware-gated tests skip there, run on device).
+- **80 tests / 19 suites green** on the iOS 26.1 simulator (5 hardware-gated tests skip there, run on device).
 - **Release configuration builds clean** (`-configuration Release -destination 'generic/platform=iOS Simulator' build`).
 
 ## Architecture (subsystems, each behind a Swift 6 isolation boundary)
@@ -35,7 +37,7 @@ Cross-boundary traffic is always `Sendable` DTOs — never live `@Model` objects
 
 - **Capture** (`OmniMind/Capture/`): RT audio tap → `AudioBufferBridge` (lock-free, bounded drop-oldest + atomic shed counter, `@unchecked Sendable` with documented linear-transfer invariant) → `AudioBufferStream` (Sendable). `AudioStreamActor` owns the engine, session (`.default` mode for far-field AGC), interruption/route-change handling. `AudioFormatConverter` (stateful SRC + `flush()`). `AudioLevel` (RMS→dBFS meter). `AudioArchive`/`AudioArchiveWriter` (optional AAC retention, named by meeting UUID). `FileAudioSource` (test double).
 - **Transcription** (`OmniMind/Transcription/`): `TranscriptionActor` on `SpeechAnalyzer`/`SpeechTranscriber`; emits `TranscriptionUpdate` (`.volatile` / `.finalized` / `.audioLevel`). `SegmentCoalescer` merges micro-utterances into coherent chunks (word/duration/gap rules) BEFORE persistence.
-- **Memory** (`OmniMind/Memory/`): `EmbeddingStore` (`@ModelActor`, the single persistence funnel — DTOs only across the boundary). `Embedder` (`NLContextualEmbedding`, mean-pool + L2-normalize). `VectorMath` (vDSP cosine + `TopKHeap`). `SchemaV1` (Meeting/Segment) + `OmniMindMigrationPlan` (V1 root; add a stage for any schema change). `SegmentPager` (windowed fetches). `SearchHit`/`EmbeddedSegment` DTOs.
+- **Memory** (`OmniMind/Memory/`): `EmbeddingStore` (`@ModelActor`, the single persistence funnel — DTOs only across the boundary; also persists AI outputs via `SynthesisArtifacts`). `Embedder` (`NLContextualEmbedding`, mean-pool + L2-normalize). `VectorMath` (vDSP cosine + `TopKHeap`). `SchemaV1` + `SchemaV2` (models nested inside the versioned enums; `Meeting`/`Segment` typealias the CURRENT version; V2 added persisted AI outputs on Meeting) + `OmniMindMigrationPlan` (add a stage for any schema change). `SegmentPager` (windowed fetches). `SearchHit`/`EmbeddedSegment` DTOs.
 - **Synthesis** (`OmniMind/Synthesis/`): `MeetingSynthesizer` actor (summaries, grounded Q&A, transcript cleanup, auto-titles, `@Generable` action items — every failure path falls back to extractive/nil). `ContextAssembler` (token-budgeted grounding). `ExtractiveSummarizer` (centroid fallback). `ChatEngine` (multi-turn RAG, per-turn retrieval).
 - **Store** (`OmniMind/Store/`): `EntitlementStore` (`@MainActor`, verified-only entitlements, lifetime `Transaction.updates` listener) + `ProductCatalog`. **Dormant during pilot** — see below.
 - **Export** (`OmniMind/Export/`): `TranscriptExporter` (Markdown), `RemindersExporter` (EventKit, access on demand).
@@ -63,7 +65,7 @@ The app is **free for all features during the pilot**. Implemented via `ProductC
 
 ## Phase history (all on `main`, all pushed)
 
-Phase 0 foundation → 1 capture graph → 2 transcription → 3 persistence → 4 embeddings/RAG search → 5 StoreKit → 6 synthesis → 7 resilience/polish → 7.5 transcription quality + free pilot → 8 launch hardening → app icon → 9 (Sprint A) latency/feel → 10 (Sprint B) background recording/auto-titles/action items → 11 (Tier 2) chat/audio replay/turn markers/onboarding.
+Phase 0 foundation → 1 capture graph → 2 transcription → 3 persistence → 4 embeddings/RAG search → 5 StoreKit → 6 synthesis → 7 resilience/polish → 7.5 transcription quality + free pilot → 8 launch hardening → app icon → 9 (Sprint A) latency/feel → 10 (Sprint B) background recording/auto-titles/action items → 11 (Tier 2) chat/audio replay/turn markers/onboarding → 12 night-review fixes round 1 (route-change crash, playable-archive honesty, SchemaV2 persisted AI outputs, tappable action items, Reminders-denial Settings link, export formatting).
 
 ## What's next (nothing in progress; awaiting user direction)
 

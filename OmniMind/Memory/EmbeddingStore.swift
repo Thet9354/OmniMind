@@ -125,6 +125,59 @@ actor EmbeddingStore {
         AudioArchive.delete(for: id)   // retained audio goes with the meeting
     }
 
+    // MARK: - Persisted AI outputs
+
+    /// Sendable snapshot of a meeting's persisted synthesis artifacts.
+    /// `actionItems` distinguishes nil (never extracted) from empty
+    /// (extraction ran, no commitments found).
+    struct SynthesisArtifacts: Sendable, Equatable {
+        var summaryText: String?
+        var summaryMethod: String?
+        var cleanedTranscript: String?
+        var actionItems: [ExtractedActionItem]?
+    }
+
+    func synthesisArtifacts(for meetingID: UUID) throws -> SynthesisArtifacts {
+        guard let meeting = try fetchMeeting(meetingID) else {
+            throw PersistenceError.meetingNotFound(meetingID)
+        }
+        return SynthesisArtifacts(
+            summaryText: meeting.summaryText,
+            summaryMethod: meeting.summaryMethod,
+            cleanedTranscript: meeting.cleanedTranscript,
+            actionItems: meeting.actionItemsData.flatMap {
+                try? JSONDecoder().decode([ExtractedActionItem].self, from: $0)
+            }
+        )
+    }
+
+    func saveSummary(_ text: String, method: String, for meetingID: UUID) throws {
+        guard let meeting = try fetchMeeting(meetingID) else {
+            throw PersistenceError.meetingNotFound(meetingID)
+        }
+        meeting.summaryText = text
+        meeting.summaryMethod = method
+        try modelContext.save()
+    }
+
+    func saveCleanedTranscript(_ text: String, for meetingID: UUID) throws {
+        guard let meeting = try fetchMeeting(meetingID) else {
+            throw PersistenceError.meetingNotFound(meetingID)
+        }
+        meeting.cleanedTranscript = text
+        try modelContext.save()
+    }
+
+    /// Persists the full array (extraction results AND check-off state —
+    /// callers re-save on every toggle).
+    func saveActionItems(_ items: [ExtractedActionItem], for meetingID: UUID) throws {
+        guard let meeting = try fetchMeeting(meetingID) else {
+            throw PersistenceError.meetingNotFound(meetingID)
+        }
+        meeting.actionItemsData = try JSONEncoder().encode(items)
+        try modelContext.save()
+    }
+
     // MARK: - Segments
 
     /// Persists one finalized segment. Saves immediately: each finalized

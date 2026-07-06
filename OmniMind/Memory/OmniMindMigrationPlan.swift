@@ -11,10 +11,14 @@ import SwiftData
 
 nonisolated enum OmniMindMigrationPlan: SchemaMigrationPlan {
     static var schemas: [any VersionedSchema.Type] {
-        [SchemaV1.self]
+        [SchemaV1.self, SchemaV2.self]
     }
 
     static var stages: [MigrationStage] {
-        []   // First shipped version — nothing to migrate from yet.
+        [
+            // V2 only ADDS optional columns (persisted AI outputs on
+            // Meeting), so SwiftData can migrate rows in place.
+            .lightweight(fromVersion: SchemaV1.self, toVersion: SchemaV2.self)
+        ]
     }
 }

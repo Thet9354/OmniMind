@@ -119,9 +119,12 @@ struct TranscriptExporterTests {
         )
 
         #expect(markdown.hasPrefix("# Q3 Planning"))
-        #expect(markdown.contains("**[00:00]** Kickoff and agenda."))
-        #expect(markdown.contains("**[01:05]** Budget review."))
-        #expect(markdown.contains("**[59:00]** Wrap-up and actions."))
+        #expect(markdown.contains("[00:00] Kickoff and agenda."))
+        #expect(markdown.contains("[01:05] Budget review."))
+        #expect(markdown.contains("[59:00] Wrap-up and actions."))
+        // Blank line between segments: the export must read as paragraphs,
+        // not a wall of consecutive lines, when shared as plain text.
+        #expect(markdown.contains("Kickoff and agenda.\n\n[01:05]"))
         // Chronological order in the document.
         let kickoff = markdown.range(of: "Kickoff")!
         let wrap = markdown.range(of: "Wrap-up")!

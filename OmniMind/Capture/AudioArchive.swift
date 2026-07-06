@@ -25,6 +25,15 @@ nonisolated enum AudioArchive {
         FileManager.default.fileExists(atPath: url(for: meetingID).path)
     }
 
+    /// True when the archive actually opens as an audio file. Existence is
+    /// not enough: a crash mid-recording strands an m4a whose header was
+    /// never finalized (AVAudioFile finalizes on deallocation), and such a
+    /// file exists but cannot play. Playback UI must key off THIS.
+    static func isPlayable(for meetingID: UUID) -> Bool {
+        guard exists(for: meetingID) else { return false }
+        return (try? AVAudioFile(forReading: url(for: meetingID))) != nil
+    }
+
     static func delete(for meetingID: UUID) {
         try? FileManager.default.removeItem(at: url(for: meetingID))
     }

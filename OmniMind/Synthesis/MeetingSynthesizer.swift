@@ -12,12 +12,14 @@ import Foundation
 import FoundationModels
 
 /// An action item surfaced from a meeting — the Sendable DTO the UI and
-/// Reminders export consume.
-nonisolated struct ExtractedActionItem: Sendable, Identifiable {
-    let id = UUID()
+/// Reminders export consume. Codable because the array persists on the
+/// Meeting row (JSON blob); `done` is the user's in-app check-off state.
+nonisolated struct ExtractedActionItem: Sendable, Identifiable, Codable, Equatable {
+    var id = UUID()
     let task: String
     let owner: String?
     let due: String?
+    var done = false
 }
 
 /// Constrained-generation schema: the model must produce this shape.
@@ -153,11 +155,32 @@ actor MeetingSynthesizer {
                 generating: GeneratedActionItems.self
             )
             return response.content.items.map {
-                ExtractedActionItem(task: $0.task, owner: $0.owner, due: $0.due)
+                ExtractedActionItem(
+                    task: $0.task,
+                    owner: Self.sanitizedField($0.owner),
+                    due: Self.sanitizedField($0.due)
+                )
             }
         } catch {
             return nil
         }
+    }
+
+    /// Models fill optional fields with placeholder prose ("Not specified",
+    /// "unknown") instead of omitting them, despite the @Guide wording.
+    /// Placeholders must read as absent — they otherwise leak into the UI
+    /// and exported Reminders.
+    nonisolated static func sanitizedField(_ raw: String?) -> String? {
+        guard let raw else { return nil }
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let placeholders: Set<String> = [
+            "not specified", "unspecified", "not stated", "not mentioned",
+            "not provided", "not applicable", "not given", "unknown",
+            "none", "n/a", "na", "nil", "null", "no owner", "no deadline",
+            "no due date", "tbd",
+        ]
+        return placeholders.contains(trimmed.lowercased()) ? nil : trimmed
     }
 
     // MARK: - Transcript cleanup (accent/ASR-garble repair)
